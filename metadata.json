@@ -1,0 +1,7 @@
+{
+  "name": "Biteo - Smart Orders",
+  "description": "Smart orders. Better business. Plataforma SaaS moderna para restaurantes, lanchonetes e delivery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
