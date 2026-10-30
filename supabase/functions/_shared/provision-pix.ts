@@ -27,20 +27,20 @@ export async function provisionPixForOrder(
   }
   try {
     const customer = await createAsaasCustomer(customerName, receipt.orderId);
-    const { error: customerError } = await db.from('order_pix_payments')
+    const { data: customerRow, error: customerError } = await db.from('order_pix_payments')
       .update({ provider_customer_id: customer.id, updated_at: new Date().toISOString() })
-      .eq('id', claim.id).eq('status', 'creating');
-    if (customerError) throw new Error('Could not persist Asaas customer');
+      .eq('id', claim.id).eq('status', 'creating').select('id').single();
+    if (customerError || !customerRow) throw new Error('Could not persist Asaas customer');
 
     // Due date is calculated on the server (UTC). Sandbox only.
     const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0,10);
     const payment = await createAsaasPixPayment(customer.id, receipt.orderId, receipt.totalCents, due);
-    const { error: paymentError } = await db.from('order_pix_payments')
+    const { data: paymentRow, error: paymentError } = await db.from('order_pix_payments')
       .update({
         provider_payment_id: payment.id, status: 'awaiting_payment',
         updated_at: new Date().toISOString(),
-      }).eq('id', claim.id).eq('status', 'creating');
-    if (paymentError) throw new Error('Could not persist Asaas payment');
+      }).eq('id', claim.id).eq('status', 'creating').select('id').single();
+    if (paymentError || !paymentRow) throw new Error('Could not persist Asaas payment');
     const qr = await getAsaasPixQrCode(payment.id);
     if (!qr.payload || !qr.encodedImage) return { status: 'unavailable' };
     return { status: 'awaiting_payment', payload: qr.payload,
