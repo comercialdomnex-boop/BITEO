@@ -75,10 +75,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     });
   }, [orders, selectedStatus, selectedType, searchQuery]);
 
-  const handleUpdateStatus = async (orderOrId: string | Order, newStatus: OrderStatus) => {
+  const handleUpdateStatus = async (orderOrId: string | Order, newStatus: OrderStatus, reason?: string) => {
     const orderId = typeof orderOrId === 'string' ? orderOrId : orderOrId.id;
     try {
-      const updated = await OrderService.updateOrderStatus(orderId, newStatus);
+      const updated = await OrderService.updateOrderStatus(orderId, newStatus, reason);
       const nextList = orders.map(o => (o.id === orderId ? updated : o));
       onOrdersChange(nextList);
 
@@ -92,6 +92,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       setStatusError(message);
       setTimeout(() => setStatusError(null), 4000);
     }
+  };
+
+  const handlePaymentConfirmed = (orderId: string) => {
+    const nextOrders = orders.map(order => order.id === orderId ? { ...order, paymentStatus: 'pago' as const } : order);
+    onOrdersChange(nextOrders);
+    setActiveModalOrder(current => current?.id === orderId ? { ...current, paymentStatus: 'pago' } : current);
   };
 
   const handleRefresh = () => {
@@ -240,6 +246,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         isOpen={Boolean(activeModalOrder)}
         onClose={() => setActiveModalOrder(null)}
         onUpdateStatus={handleUpdateStatus}
+        onPaymentConfirmed={handlePaymentConfirmed}
       />
     </div>
   );

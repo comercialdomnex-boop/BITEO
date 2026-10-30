@@ -1,5 +1,4 @@
 import React from 'react';
-import type { PixCheckoutResult } from '../../services/checkoutApi';
 import { Order, StoreConfig } from '../../types';
 import { formatCurrency, getPaymentMethodLabel, StatusBadge } from '../../components/shared';
 import { buildWhatsAppUrl, formatPhoneMask } from '../../utils/phone';
@@ -21,7 +20,6 @@ import {
 
 interface OrderConfirmedViewProps {
   order: Order;
-  pix?: PixCheckoutResult | null;
   storeConfig: StoreConfig;
   onNewOrder: () => void;
   onViewInMerchant?: () => void;
@@ -31,7 +29,6 @@ interface OrderConfirmedViewProps {
 
 export const OrderConfirmedView: React.FC<OrderConfirmedViewProps> = ({
   order,
-  pix,
   storeConfig,
   onNewOrder,
   onViewInMerchant,
@@ -124,32 +121,33 @@ Acompanhando pelo Biteo!`;
           </h2>
           <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
             Recebido por <strong className="text-zinc-200">{info.name}</strong>.
-            A cozinha já está com o seu pedido!
+            Aguarde a confirmação do estabelecimento para iniciar o preparo.
           </p>
         </div>
       </div>
 
       {order.paymentMethod === 'pix' && (
-        <section className={`p-4 ${styles.card} space-y-3`} aria-label="Pagamento PIX">
-          <h3 className="text-base font-bold text-white">PIX Sandbox — aguardando pagamento</h3>
-          {pix?.status === 'awaiting_payment' ? (
+        <section className={`p-4 ${styles.card} space-y-3`} aria-label="Pagamento PIX direto">
+          <h3 className="text-base font-bold text-white">PIX direto para {info.name}</h3>
+          <p className="text-xs text-zinc-300">O pagamento será feito diretamente ao estabelecimento. O BITEO não confirma transferências automaticamente.</p>
+          {storeConfig.payments.pixKey?.trim() ? (
             <>
-              <p className="text-xs text-zinc-300">Escaneie o QR Code ou copie o código PIX abaixo. Este pedido ainda não está pago.</p>
-              <img
-                src={`data:image/png;base64,${pix.encodedImage}`}
-                alt="QR Code PIX Asaas Sandbox"
-                className="w-52 h-52 mx-auto rounded-xl bg-white p-2"
-              />
+              <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
+                <p className="text-[11px] text-zinc-400 mb-1">Chave PIX da loja</p>
+                <p className="text-sm font-mono text-white break-all select-all">{storeConfig.payments.pixKey.trim()}</p>
+              </div>
               <button type="button"
-                onClick={() => navigator.clipboard.writeText(pix.payload)}
-                className="w-full rounded-xl bg-orange-600 text-white font-bold text-xs py-3">
-                Copiar código PIX
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(storeConfig.payments.pixKey!.trim()); }
+                  catch { window.alert('Não foi possível copiar. Selecione a chave PIX exibida acima.'); }
+                }}
+                className="w-full rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs py-3">
+                Copiar chave PIX
               </button>
-              <p className="text-[11px] text-zinc-400 break-all">{pix.payload}</p>
-              {pix.expirationDate && <p className="text-xs text-zinc-400">Validade informada pelo Asaas: {pix.expirationDate}</p>}
+              <p className="text-xs text-amber-300">Transfira {formatCurrency(order.total)} e confirme os dados do destinatário no aplicativo do seu banco. Informe o pedido {order.displayId} à loja. Aguarde a confirmação do recebimento.</p>
             </>
           ) : (
-            <p className="text-sm text-amber-300">Pedido recebido, mas não foi possível gerar o PIX. Não envie outro pedido: entre em contato com a loja e informe o número do pedido.</p>
+            <p className="text-sm text-amber-300">A chave PIX não está disponível. Não faça outro pedido: entre em contato com a loja e informe o número {order.displayId}.</p>
           )}
         </section>
       )}

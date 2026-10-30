@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Order, OrderStatus } from '../../types';
 import { OrderService } from '../../services/orderService';
+import { confirmManualOrderPayment } from '../../services/manualPaymentService';
 import {
   Modal,
   Button,
@@ -33,6 +34,7 @@ interface OrderDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (orderId: string, status: OrderStatus, reason?: string) => void;
+  onPaymentConfirmed: (orderId: string) => void;
 }
 
 export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
@@ -40,8 +42,12 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   isOpen,
   onClose,
   onUpdateStatus,
+  onPaymentConfirmed,
 }) => {
   const [isPrinting, setIsPrinting] = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentBusy, setPaymentBusy] = useState(false);
   const [printFeedback, setPrintFeedback] = useState(false);
 
   // Cancellation Modal state
@@ -52,6 +58,21 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   if (!order) return null;
 
   const paymentInfo = getPaymentStatusInfo(order.paymentStatus);
+
+  const handleConfirmPayment = async () => {
+    if (!order || paymentBusy) return;
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      await confirmManualOrderPayment(order.id);
+      onPaymentConfirmed(order.id);
+      setConfirmingPayment(false);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Não foi possível confirmar o pagamento.');
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -445,6 +466,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </span>
             </div>
 
+            {order.paymentMethod === 'pix' && order.paymentStatus === 'pendente' && order.status !== 'cancelado' && (
+              <div className="pt-3 border-t border-zinc-800 space-y-2">
+                <p className="text-amber-300">Confira o crédito na conta bancária da loja antes de confirmar.</p>
+                {paymentError && <p role="alert" className="text-rose-400">{paymentError}</p>}
+                <Button variant="primary" size="sm" onClick={() => { setPaymentError(null); setConfirmingPayment(true); }}>Confirmar recebimento PIX</Button>
+              </div>
+            )}
+
             {/* Payment Method Badge */}
             <div className="pt-2 border-t border-zinc-850 flex items-center justify-between text-[11px]">
               <span className="text-zinc-400">
@@ -458,6 +487,20 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           </div>
         </div>
       </Modal>
+
+      {confirmingPayment && order && (
+        <Modal
+          isOpen={confirmingPayment}
+          onClose={() => { if (!paymentBusy) setConfirmingPayment(false); }}
+          title="Confirmar recebimento PIX"
+          subtitle={`Pedido ${order.displayId}`}
+          maxWidth="sm"
+          footer={<div className="flex gap-2 justify-end w-full"><Button variant="secondary" size="sm" onClick={() => setConfirmingPayment(false)} isLoading={false}>Voltar</Button><Button variant="primary" size="sm" onClick={handleConfirmPayment} isLoading={paymentBusy}>Confirmar pagamento recebido</Button></div>}
+        >
+          <p className="text-sm text-zinc-200">Você verificou no banco que a loja recebeu {formatCurrency(order.total)}? Esta ação registra o pagamento como pago, mas não verifica a transferência automaticamente.</p>
+          {paymentError && <p role="alert" className="text-sm text-rose-400 mt-2">{paymentError}</p>}
+        </Modal>
+      )}
 
       {/* Cancellation Reason Modal */}
       {isCancelling && (
