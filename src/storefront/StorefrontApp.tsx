@@ -259,6 +259,10 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
     deliveryFee: number;
     total: number;
   }) => {
+    // Re-evaluate the clock at submission, even if checkout was opened earlier.
+    if (!RestaurantService.buildProfile(storeConfig).isOpen) {
+      throw new Error('A loja não está recebendo pedidos agora. Confira o horário e tente novamente mais tarde.');
+    }
     const customerPhone = normalizePhone(orderPayload.customer.phone);
 
     // Immutable snapshots: productId, basePrice and structured modifiers survive

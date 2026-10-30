@@ -1,3 +1,5 @@
+import { StoreService } from './storeService';
+import { RestaurantService } from './restaurantService';
 import {
   Order,
   OrderFilterOptions,
@@ -194,6 +196,10 @@ export class OrderService {
     }
   ): Promise<Order> {
     const storeId = this.activeStoreId;
+    const config = await StoreService.getStoreConfig(storeId);
+    if (!RestaurantService.buildProfile(config).isOpen) {
+      throw new Error('A loja não está recebendo pedidos agora.');
+    }
     const orderNumber = (this.storeCounters.get(storeId) ?? 0) + 1;
     this.storeCounters.set(storeId, orderNumber);
 

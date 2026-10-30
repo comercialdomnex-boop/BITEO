@@ -55,10 +55,18 @@ export default function App() {
   // Bumped by the retry button to re-run the store hydration effect.
   const [bootNonce, setBootNonce] = useState(0);
 
+  const [availabilityTime, setAvailabilityTime] = useState(() => new Date());
+  useEffect(() => {
+    const refresh = () => setAvailabilityTime(new Date());
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, []);
+
   /** Derived read-only projection: never a second writable source. */
   const restaurant: RestaurantProfile = useMemo(
-    () => RestaurantService.buildProfile(storeConfig),
-    [storeConfig]
+    () => RestaurantService.buildProfile(storeConfig, availabilityTime),
+    [storeConfig, availabilityTime]
   );
 
   // Single writable source for the active store: mirrors it into React state and
@@ -178,6 +186,7 @@ export default function App() {
 
   // Single writable source: the store config. The restaurant profile is derived.
   const handleUpdateStoreConfig = (updated: StoreConfig) => {
+    StoreService.registerStore(updated.id, updated);
     setStoreConfig(updated);
     if (currentStore) {
       SessionService.updateStoreData(currentStore.id, {

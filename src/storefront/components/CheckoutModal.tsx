@@ -255,6 +255,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryFee,
         total,
       });
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Não foi possível enviar o pedido. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

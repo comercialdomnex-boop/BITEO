@@ -1,3 +1,4 @@
+import { OrderAcceptanceControl } from '../../merchant/components/OrderAcceptanceControl';
 import React from 'react';
 import { Bell, Volume2, VolumeX, Store, ExternalLink } from 'lucide-react';
 import { RestaurantProfile } from '../../types';
@@ -5,6 +6,8 @@ import { RestaurantProfile } from '../../types';
 interface HeaderProps {
   restaurant: RestaurantProfile;
   onToggleStatus: () => void;
+  statusDisabled?: boolean;
+  statusSaving?: boolean;
   onToggleSound?: () => void;
   onOpenStorefront?: () => void;
   onOpenStoreSwitcher?: () => void;
@@ -13,6 +16,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   restaurant,
   onToggleStatus,
+  statusDisabled,
+  statusSaving,
   onToggleSound,
   onOpenStorefront,
   onOpenStoreSwitcher,
@@ -65,24 +70,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Quick Operational Status & Actions */}
         <div className="flex items-center gap-2">
-          {/* Store Open/Closed Toggle */}
-          <button
-            onClick={onToggleStatus}
-            type="button"
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-              restaurant.isOpen
-                ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/40'
-                : 'bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/80'
-            }`}
-            title={restaurant.isOpen ? 'Clique para fechar o restaurante' : 'Clique para abrir o restaurante'}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                restaurant.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-zinc-500'
-              }`}
-            />
-            <span>{restaurant.isOpen ? 'Aberto' : 'Pausado'}</span>
-          </button>
+          <OrderAcceptanceControl restaurant={restaurant} onToggle={onToggleStatus}
+            disabled={statusDisabled} saving={statusSaving} />
 
           {/* Sound Notification Alert Toggle */}
           {onToggleSound && (
