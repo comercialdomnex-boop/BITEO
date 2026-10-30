@@ -13,9 +13,13 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: .33;
-  background-image: radial-gradient(circle, rgba(255,168,109,.55) .8px, transparent 1px);
-  background-size: 54px 54px;
+  opacity: .36;
+  background-image:
+    radial-gradient(circle, rgba(255,166,107,.7) .9px, transparent 1.6px),
+    radial-gradient(circle, rgba(170,195,240,.45) .7px, transparent 1.4px);
+  background-size: 72px 72px, 113px 113px;
+  background-position: 0 0, 24px 40px;
+  animation: biteo-merchant-particles 32s ease-in-out infinite alternate;
   mask-image: linear-gradient(120deg, transparent 12%, #000 78%);
 }
 .merchant-theme :is(aside, header) {
@@ -64,4 +68,22 @@
 .merchant-theme [class*="rounded-2xl"][class*="border"] { box-shadow: 0 10px 28px rgba(4,8,16,.14); }
 @media (prefers-reduced-motion: reduce) {
   .merchant-theme button { transition: none; }
+}
+
+/* Login-inspired ambient movement, deliberately quieter than the auth screen. */
+.merchant-theme {
+  background-size: 130% 130%, 140% 140%, auto !important;
+  animation: biteo-merchant-ambient 24s ease-in-out infinite alternate;
+}
+@keyframes biteo-merchant-particles {
+  0% { transform: translate3d(0,0,0); opacity: .23; }
+  50% { opacity: .38; }
+  100% { transform: translate3d(16px,-22px,0); opacity: .28; }
+}
+@keyframes biteo-merchant-ambient {
+  0% { background-position: 90% 0%, 0% 100%, center; }
+  100% { background-position: 72% 18%, 12% 80%, center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .merchant-theme, .merchant-theme::before { animation: none !important; }
 }
