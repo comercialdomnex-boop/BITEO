@@ -12,6 +12,7 @@ import {
 import { MenuService } from '../services/menuService';
 import { OrderService } from '../services/orderService';
 import { submitGuestOrder } from '../services/checkoutApi';
+import type { PixCheckoutResult } from '../services/checkoutApi';
 import { RestaurantService } from '../services/restaurantService';
 import { createEmptyStoreConfig } from '../services/storeService';
 import { evaluateSchedule } from '../utils/hours';
@@ -87,6 +88,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
 
   // Confirmed Order State for Live Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [confirmedPix, setConfirmedPix] = useState<PixCheckoutResult | null>(null);
 
   // Sync cart changes to localStorage
   useEffect(() => {
@@ -343,6 +345,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
 
     // Close checkout and show confirmed view
     setIsCheckoutModalOpen(false);
+    setConfirmedPix(receipt.pix ?? null);
     setConfirmedOrder(newOrder);
   };
 
@@ -421,8 +424,9 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
           return (
             <OrderConfirmedView
               order={liveOrder}
+              pix={confirmedPix}
               storeConfig={storeConfig}
-              onNewOrder={() => setConfirmedOrder(null)}
+              onNewOrder={() => { setConfirmedOrder(null); setConfirmedPix(null); }}
               onViewInMerchant={
                 onViewOrderInMerchant
                   ? () => onViewOrderInMerchant(liveOrder)
