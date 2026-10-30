@@ -141,7 +141,7 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
     if (!canEditStore || currentRole === null || acceptanceInFlight.current) return;
     acceptanceInFlight.current = true;
     const storeId = storeConfig.id;
-    const opening = !storeConfig.operations.acceptingOrders;
+    const opening = !storeConfig.operations.acceptingOrders || !storeConfig.online.isPublished;
     setAcceptanceSaving(true);
     setAcceptanceError(null);
     try {
