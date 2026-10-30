@@ -1,3 +1,4 @@
+import { saveStorePublication } from '../../services/storePublicationPersistence';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   StoreConfig,
@@ -271,11 +272,29 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
     }
   };
 
+  const [publicationSaving, setPublicationSaving] = useState(false);
   const handleUpdateOnline = async (
     onlineUpdates: Partial<StoreOnlineSettings>
   ) => {
-    const updated = await StoreService.updateOnline(config.id, onlineUpdates);
-    onUpdateConfig(updated);
+    if (publicationSaving) return;
+    if (onlineUpdates.isPublished === undefined) {
+      const updated = await StoreService.updateOnline(config.id, onlineUpdates);
+      onUpdateConfig(updated);
+      return;
+    }
+    setPublicationSaving(true);
+    setSaveError(null);
+    try {
+      const published = await saveStorePublication(config.id, onlineUpdates.isPublished);
+      const updated = await StoreService.updateOnline(config.id, { isPublished: published });
+      onUpdateConfig(updated);
+      setSaveState('saved');
+    } catch (error) {
+      setSaveState('error');
+      setSaveError(toFriendlyStoreUpdateError(error));
+    } finally {
+      setPublicationSaving(false);
+    }
   };
 
   const tabs: {
@@ -464,6 +483,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
             <OnlineStoreTab
               config={config}
               onUpdateOnline={handleUpdateOnline}
+              publicationSaving={publicationSaving}
               onOpenStorefront={onOpenStorefront}
               onSaveNotice={showToast}
             />
