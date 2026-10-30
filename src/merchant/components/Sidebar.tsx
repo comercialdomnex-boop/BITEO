@@ -222,8 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          <OrderAcceptanceControl restaurant={restaurant} onToggle={onToggleStatus}
-            disabled={statusDisabled} saving={statusSaving} />
+          <span role="status" className="text-xs text-zinc-400">{restaurant.isOpen ? 'Loja aberta' : 'Loja fechada'}</span>
         </div>
 
         {/* Storefront direct button */}
