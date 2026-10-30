@@ -352,7 +352,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       setCartItems([]);
       try { localStorage.removeItem(`biteo_cart_${storeConfig.id}`); } catch { /* storage indisponível */ }
       setIsCheckoutModalOpen(false);
-      throw new Error(`Pedido #${receipt.orderNumber} recebido pela loja. Houve um problema ao exibir a confirmação; NÃO envie novamente. Consulte o estabelecimento.`);
+      window.alert(`Pedido #${receipt.orderNumber} recebido pela loja. Houve um problema ao exibir a confirmação; NÃO envie novamente. Consulte o estabelecimento.`);
     }
   };
 
