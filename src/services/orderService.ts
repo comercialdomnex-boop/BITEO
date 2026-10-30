@@ -193,18 +193,19 @@ export class OrderService {
   static async createOrder(
     orderData: Omit<Order, 'id' | 'displayId' | 'createdAt' | 'statusHistory' | 'status'> & {
       status?: OrderStatus;
-    }
+    },
+    serverReceipt?: { orderId: string; orderNumber: number }
   ): Promise<Order> {
     const storeId = this.activeStoreId;
     const config = await StoreService.getStoreConfig(storeId);
     if (!RestaurantService.buildProfile(config).isOpen) {
       throw new Error('A loja não está recebendo pedidos agora.');
     }
-    const orderNumber = (this.storeCounters.get(storeId) ?? 0) + 1;
+    const orderNumber = serverReceipt?.orderNumber ?? (this.storeCounters.get(storeId) ?? 0) + 1;
     this.storeCounters.set(storeId, orderNumber);
 
     const displayId = `#${orderNumber}`;
-    const id = `ord_${storeId}_${orderNumber}_${Date.now()}`;
+    const id = serverReceipt?.orderId ?? `ord_${storeId}_${orderNumber}_${Date.now()}`;
     const now = new Date().toISOString();
 
     const status: OrderStatus = orderData.status || 'novo';

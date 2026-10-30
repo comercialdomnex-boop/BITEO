@@ -286,8 +286,16 @@ export default function App() {
         );
 
       case 'onboarding':
-        return (
-          <OnboardingWizard
+  if (status !== 'authenticated' || !currentUser) {
+    return (
+      <LoginView
+        onGoToRegister={() => setCurrentRoute('cadastro')}
+      />
+    );
+  }
+
+  return (
+    <OnboardingWizard
             onComplete={handleOnboardingComplete}
             onCancel={
               currentUser && availableStores.length > 0
@@ -310,12 +318,20 @@ export default function App() {
           />
         );
 
-      case 'merchant':
-      default:
-        return (
-          <MerchantApp
-            restaurant={restaurant}
-            storeConfig={storeConfig}
+    case 'merchant':
+default:
+  if (status !== 'authenticated' || !currentUser) {
+    return (
+      <LoginView
+        onGoToRegister={() => setCurrentRoute('cadastro')}
+      />
+    );
+  }
+
+  return (
+    <MerchantApp
+      restaurant={restaurant}
+      storeConfig={storeConfig}
             orders={orders}
             forceMobileLayout={isFramed}
             initialSelectedOrderId={highlightOrderId}

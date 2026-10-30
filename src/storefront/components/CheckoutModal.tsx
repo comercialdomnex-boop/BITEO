@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StoreConfig, PaymentMethod, PaymentStatus } from '../../types';
 import { CartItem, CustomerFormData, AddressFormData, PaymentFormData } from '../types';
 import { formatCurrency, Modal, calculateCartTotals } from '../../components/shared';
@@ -51,6 +51,8 @@ interface CheckoutModalProps {
     subtotal: number;
     deliveryFee: number;
     total: number;
+    turnstileToken: string;
+    deliveryAreaId?: string;
   }) => Promise<void>;
   primaryColor?: string;
   visualStyle?: 'moderno' | 'minimalista' | 'vibrante';
@@ -73,6 +75,48 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const turnstileContainer = useRef<HTMLDivElement>(null);
+  const widgetId = useRef<string | null>(null);
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
+  useEffect(() => {
+    if (!isOpen || step !== 4 || !siteKey) return;
+    let cancelled = false;
+    const renderWidget = () => {
+      if (cancelled || !turnstileContainer.current || widgetId.current !== null) return;
+      const api = (window as any).turnstile;
+      if (!api) return;
+      widgetId.current = api.render(turnstileContainer.current, {
+        sitekey: siteKey,
+        callback: (token: string) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      });
+    };
+    const scriptId = 'biteo-turnstile-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', renderWidget);
+    const poll = window.setInterval(renderWidget, 250);
+    renderWidget();
+    return () => {
+      cancelled = true;
+      script?.removeEventListener('load', renderWidget);
+      window.clearInterval(poll);
+      if (widgetId.current !== null) {
+        try { (window as any).turnstile?.remove(widgetId.current); } catch { /* no-op */ }
+        widgetId.current = null;
+      }
+      setTurnstileToken('');
+    };
+  }, [isOpen, step, siteKey]);
 
   // Form State: Customer
   const [customer, setCustomer] = useState<CustomerFormData>({
@@ -219,6 +263,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleFinalSubmit = async () => {
     if (isSubmitting) return;
+    setCheckoutError(null);
+    if (!turnstileToken) { setCheckoutError('Conclua a verificação de segurança antes de enviar.'); return; }
     setIsSubmitting(true);
 
     try {
@@ -254,9 +300,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         subtotal,
         deliveryFee,
         total,
+        turnstileToken,
+        deliveryAreaId: orderModality === 'delivery' ? activeAreas.find(a => a.name.trim().toLowerCase() === address.neighborhood.trim().toLowerCase())?.id : undefined,
       });
     } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : 'Não foi possível enviar o pedido. Tente novamente.');
+      setCheckoutError(error instanceof Error ? error.message : 'Não foi possível finalizar o pedido.');
+      setTurnstileToken('');
+      if (widgetId.current !== null) (window as any).turnstile?.reset(widgetId.current);
     } finally {
       setIsSubmitting(false);
     }
@@ -1236,6 +1286,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              {siteKey ? <div ref={turnstileContainer} /> : <p className="text-rose-400 text-xs">Configure VITE_TURNSTILE_SITE_KEY para habilitar o checkout.</p>}
+              {checkoutError && <p role="alert" className="text-rose-400 text-xs">{checkoutError}</p>}
             </div>
 
             {/* Financial Breakdown */}

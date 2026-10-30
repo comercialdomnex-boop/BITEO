@@ -1,0 +1,76 @@
+.biteo-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 15% 75%, rgba(255, 85, 0, 0.08), transparent 55%);
+}
+
+.biteo-particles__glow {
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  left: -160px;
+  bottom: -150px;
+  border-radius: 50%;
+  background: rgba(255, 85, 0, 0.18);
+  filter: blur(95px);
+  animation: biteo-glow 9s ease-in-out infinite alternate;
+}
+
+.biteo-particles__cursor-glow {
+  position: absolute;
+  left: var(--mouse-x, -1000px);
+  top: var(--mouse-y, -1000px);
+  width: 290px;
+  height: 290px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255, 85, 0, 0.19) 0%, rgba(255, 85, 0, 0.07) 38%, transparent 70%);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.biteo-particles--active .biteo-particles__cursor-glow {
+  opacity: 1;
+}
+
+.biteo-particles__dot {
+  position: absolute;
+  left: var(--particle-left);
+  top: var(--particle-top);
+  width: var(--particle-size);
+  height: var(--particle-size);
+  transform: translate3d(var(--push-x, 0px), var(--push-y, 0px), 0);
+}
+
+.biteo-particles__dot-core {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #ff6a21;
+  opacity: var(--particle-opacity);
+  box-shadow: 0 0 9px rgba(255, 85, 0, 0.6);
+  animation: biteo-float var(--particle-duration) ease-in-out var(--particle-delay) infinite alternate;
+}
+
+@keyframes biteo-float {
+  from { transform: translate3d(0, 12px, 0); }
+  to { transform: translate3d(16px, -45px, 0); }
+}
+
+@keyframes biteo-glow {
+  from { transform: translate3d(0, 0, 0); opacity: 0.55; }
+  to { transform: translate3d(100px, -60px, 0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .biteo-particles__dot-core,
+  .biteo-particles__glow {
+    animation: none;
+  }
+  .biteo-particles__cursor-glow { display: none; }
+}

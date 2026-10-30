@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { MenuService } from '../services/menuService';
 import { OrderService } from '../services/orderService';
+import { submitGuestOrder } from '../services/checkoutApi';
 import { RestaurantService } from '../services/restaurantService';
 import { createEmptyStoreConfig } from '../services/storeService';
 import { evaluateSchedule } from '../utils/hours';
@@ -258,6 +259,8 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
     subtotal: number;
     deliveryFee: number;
     total: number;
+    turnstileToken: string;
+    deliveryAreaId?: string;
   }) => {
     // Re-evaluate the clock at submission, even if checkout was opened earlier.
     if (!RestaurantService.buildProfile(storeConfig).isOpen) {
@@ -280,6 +283,20 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       })
     );
 
+    // Somente a confirmação do servidor autoriza exibir o pedido como recebido.
+    const receipt = await submitGuestOrder({
+      storeId: storeConfig.id,
+      customer: { name: orderPayload.customer.name, phone: orderPayload.customer.phone, phoneNormalized: customerPhone },
+      type: orderPayload.type,
+      deliveryAddress: orderPayload.deliveryAddress,
+      deliveryAreaId: orderPayload.deliveryAreaId,
+      paymentMethod: orderPayload.paymentMethod,
+      changeForCents: orderPayload.changeFor === undefined ? undefined : toCents(orderPayload.changeFor),
+      notes: orderPayload.generalNotes,
+      cartItems,
+      turnstileToken: orderPayload.turnstileToken,
+    });
+
     // First order must be derived from this store's own history.
     const isFirstOrder = !(await OrderService.hasPreviousOrder(customerPhone));
 
@@ -296,7 +313,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       subtotal: orderPayload.subtotal,
       deliveryFee: orderPayload.deliveryFee,
       discount: 0,
-      total: orderPayload.total,
+      total: fromCents(receipt.totalCents),
       paymentMethod: orderPayload.paymentMethod,
       paymentStatus: orderPayload.paymentStatus,
       changeFor: orderPayload.changeFor,
@@ -306,7 +323,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         orderPayload.type === 'delivery'
           ? parseInt(delivery.estimatedDeliveryTime) || 45
           : parseInt(delivery.estimatedPickupTime) || 20,
-    });
+    }, { orderId: receipt.orderId, orderNumber: receipt.orderNumber });
 
     // Notify parent App and Merchant
     if (onOrderPlaced) {
