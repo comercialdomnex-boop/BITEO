@@ -46,3 +46,15 @@
 6. Validar duas lojas em Sandbox; só depois propor deploy de produção.
 
 **Este documento não executa migrations, não ativa cobranças e não implanta serviços.**
+
+## Decisão de produto — conta própria e acesso Asaas para cada lojista
+
+- **Modelo preferencial: subcontas não-BaaS**: cada estabelecimento tem conta financeira individual e acesso direto ao site/app Asaas, com ativação e documentação pelo titular. A conta-pai da plataforma precisa ser PJ (CNPJ); confirmar habilitação, limites e taxas com Asaas antes de ativar.
+- **Alternativa**: conectar contas Asaas independentes já existentes por processo seguro de autorização/credenciais, se a operação de subcontas não for adequada. Não presumir que o Asaas disponibilize OAuth: validar fluxo suportado.
+- No BITEO, a seção Financeiro > Minha conta Asaas mostrará status de conexão, identificação mascarada da conta, link ao painel Asaas e resumo dos recebimentos da loja, nunca API keys.
+- Uma loja só poderá operar cobranças após associação explícita de uma conta de recebimento válida; ausência de vínculo deve bloquear o PIX com mensagem clara.
+- O backend deverá selecionar a conta pelo `store_id` do pedido validado no banco, e a confirmação de webhook deverá usar a credencial correta e autenticação por conta, sem confiar em `store_id` do corpo do webhook.
+- Segredos por conta em cofre/secret manager; banco mantém somente referências e metadados de vínculo. Separar Sandbox/produção e prever rotação e revogação.
+- O lojista mantém o acesso direto ao Asaas, independente do login no BITEO; permissões de membros no BITEO não concedem acesso ao Asaas automaticamente.
+
+**Referências oficiais**: https://docs.asaas.com/docs/criacao-de-subcontas ; https://docs.asaas.com/docs/detalhamento-do-fluxo-de-aprovacao-de-subcontas ; https://docs.asaas.com/docs/criar-novo-webhook-pela-api
