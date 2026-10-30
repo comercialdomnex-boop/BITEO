@@ -89,7 +89,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
 
           <button
             type="button"
-            onClick={onToggleStoreStatus}
+            disabled
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
               restaurant.isOpen
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
@@ -156,7 +156,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
               <div>
                 <h4 className="font-semibold text-white">Horários de Funcionamento</h4>
                 <p className="text-[11px] text-zinc-400">
-                  Abertura semanal e turnos por dia da semana
+                  Um período de funcionamento por dia
                 </p>
               </div>
             </div>

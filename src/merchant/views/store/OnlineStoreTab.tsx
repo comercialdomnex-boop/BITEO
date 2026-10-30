@@ -107,17 +107,12 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
               </span>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              {online.isPublished ? "A loja está publicada. O recebimento também depende do horário e do controle Aceitar pedidos." : "Publique a loja para permitir que clientes façam pedidos dentro do horário configurado."}
+              {online.isPublished ? "O cardápio está publicado. A abertura e o fechamento são controlados pelo botão no cabeçalho." : "Use Abrir loja no cabeçalho para publicar o cardápio e ativar o recebimento de pedidos."}
             </p>
           </div>
         </div>
 
-        <button type="button" role="switch" aria-checked={online.isPublished}
-          disabled={publicationSaving}
-          onClick={() => onUpdateOnline({ isPublished: !online.isPublished })}
-          className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold">
-          {publicationSaving ? 'Salvando…' : online.isPublished ? 'Despublicar loja' : 'Publicar loja'}
-        </button>
+        {/* Publication is managed by the single Open/Close control in Merchant header. */}
         {/* Quick Open Storefront Button */}
         {onOpenStorefront && (
           <Button
