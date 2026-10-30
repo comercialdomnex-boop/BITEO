@@ -19,7 +19,7 @@ export function OrderAcceptanceControl({ restaurant, onToggle, disabled = false,
       disabled={disabled || saving} onClick={onToggle} aria-busy={saving}
       className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-white disabled:opacity-50 disabled:cursor-not-allowed">
       <span className={`h-2 w-2 rounded-full ${restaurant.acceptingOrders ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
-      Aceitar pedidos: {saving ? 'Salvando…' : restaurant.acceptingOrders ? 'ativado' : 'desativado'}
+      {saving ? 'Salvando…' : restaurant.acceptingOrders ? 'Fechar loja' : 'Abrir loja'}
     </button>
     <span role="status" className={restaurant.isOpen ? 'text-emerald-400' : 'text-zinc-400'}>
       {orderAvailabilityLabel(restaurant)}
