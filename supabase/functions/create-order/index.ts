@@ -90,9 +90,15 @@ Deno.serve(async (req) => {
     if (payload.paymentMethod === 'pix') {
       const receipt = data as { orderId: string; orderNumber: number; totalCents: number; status: string };
       const customer = payload.customer as { name?: string } | undefined;
-      const pix = await provisionPixForOrder(
-        supabase, receipt, String(payload.storeId), String(customer?.name ?? ''),
-      );
+      let pix: Awaited<ReturnType<typeof provisionPixForOrder>> = { status: 'unavailable' };
+      try {
+        pix = await provisionPixForOrder(
+          supabase, receipt, String(payload.storeId), String(customer?.name ?? ''),
+        );
+      } catch (pixError) {
+        console.error('PIX failed after order commit',
+          pixError instanceof Error ? pixError.name : 'unknown');
+      }
       return respond(201, { ...receipt, pix }, headers);
     }
     return respond(201, data, headers);
