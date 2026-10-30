@@ -1,4 +1,5 @@
 import React from 'react';
+import type { PixCheckoutResult } from '../../services/checkoutApi';
 import { Order, StoreConfig } from '../../types';
 import { formatCurrency, getPaymentMethodLabel, StatusBadge } from '../../components/shared';
 import { buildWhatsAppUrl, formatPhoneMask } from '../../utils/phone';
@@ -20,6 +21,7 @@ import {
 
 interface OrderConfirmedViewProps {
   order: Order;
+  pix?: PixCheckoutResult | null;
   storeConfig: StoreConfig;
   onNewOrder: () => void;
   onViewInMerchant?: () => void;
@@ -29,6 +31,7 @@ interface OrderConfirmedViewProps {
 
 export const OrderConfirmedView: React.FC<OrderConfirmedViewProps> = ({
   order,
+  pix,
   storeConfig,
   onNewOrder,
   onViewInMerchant,
@@ -125,6 +128,31 @@ Acompanhando pelo Biteo!`;
           </p>
         </div>
       </div>
+
+      {order.paymentMethod === 'pix' && (
+        <section className={`p-4 ${styles.card} space-y-3`} aria-label="Pagamento PIX">
+          <h3 className="text-base font-bold text-white">PIX Sandbox — aguardando pagamento</h3>
+          {pix?.status === 'awaiting_payment' ? (
+            <>
+              <p className="text-xs text-zinc-300">Escaneie o QR Code ou copie o código PIX abaixo. Este pedido ainda não está pago.</p>
+              <img
+                src={`data:image/png;base64,${pix.encodedImage}`}
+                alt="QR Code PIX Asaas Sandbox"
+                className="w-52 h-52 mx-auto rounded-xl bg-white p-2"
+              />
+              <button type="button"
+                onClick={() => navigator.clipboard.writeText(pix.payload)}
+                className="w-full rounded-xl bg-orange-600 text-white font-bold text-xs py-3">
+                Copiar código PIX
+              </button>
+              <p className="text-[11px] text-zinc-400 break-all">{pix.payload}</p>
+              {pix.expirationDate && <p className="text-xs text-zinc-400">Validade informada pelo Asaas: {pix.expirationDate}</p>}
+            </>
+          ) : (
+            <p className="text-sm text-amber-300">Pedido recebido, mas não foi possível gerar o PIX. Não envie outro pedido: entre em contato com a loja e informe o número do pedido.</p>
+          )}
+        </section>
+      )}
 
       {/* Storefront to Merchant handoff for a real order */}
       {onViewInMerchant && (
