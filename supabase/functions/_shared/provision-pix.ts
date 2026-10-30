@@ -22,6 +22,23 @@ export async function provisionPixForOrder(
 
   if (claimError || !claim) {
     // Unique order_id prevents a second Asaas charge for the same order.
+    // A replay may safely retrieve the existing charge, never create another.
+    if (claimError?.code === '23505') {
+      const { data: existing, error: lookupError } = await db.from('order_pix_payments')
+        .select('provider_payment_id,status,amount_cents,store_id')
+        .eq('order_id', receipt.orderId).maybeSingle();
+      if (!lookupError && existing?.store_id === storeId &&
+          existing.amount_cents === receipt.totalCents &&
+          existing.provider_payment_id && existing.status === 'awaiting_payment') {
+        try {
+          const qr = await getAsaasPixQrCode(existing.provider_payment_id);
+          if (qr.payload && qr.encodedImage) {
+            return { status: 'awaiting_payment', payload: qr.payload,
+              encodedImage: qr.encodedImage, expirationDate: qr.expirationDate };
+          }
+        } catch { /* charge exists: do not recreate */ }
+      }
+    }
     console.error('PIX claim unavailable', claimError?.code);
     return { status: 'unavailable' };
   }
