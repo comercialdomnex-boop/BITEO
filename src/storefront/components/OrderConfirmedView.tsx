@@ -114,7 +114,7 @@ Acompanhando pelo Biteo!`;
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-2">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Pedido Confirmado com Sucesso!</span>
+            <span>Pedido Recebido com Sucesso!</span>
           </div>
           <h2 className="text-2xl font-extrabold text-white">
             Pedido {order.displayId}
@@ -357,7 +357,7 @@ Acompanhando pelo Biteo!`;
             </span>
           </div>
           <div className="pt-2 border-t border-zinc-800 flex justify-between items-baseline font-bold text-white">
-            <span className="text-sm">Total Pago / A Pagar</span>
+            <span className="text-sm">Total do Pedido (pagamento não confirmado)</span>
             <span
               className="text-base font-mono tabular-nums"
               style={{ color: primaryColor }}
