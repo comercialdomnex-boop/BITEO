@@ -75,10 +75,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     });
   }, [orders, selectedStatus, selectedType, searchQuery]);
 
-  const handleUpdateStatus = async (orderOrId: string | Order, newStatus: OrderStatus) => {
+  const handleUpdateStatus = async (orderOrId: string | Order, newStatus: OrderStatus, reason?: string) => {
     const orderId = typeof orderOrId === 'string' ? orderOrId : orderOrId.id;
     try {
-      const updated = await OrderService.updateOrderStatus(orderId, newStatus);
+      const updated = await OrderService.updateOrderStatus(orderId, newStatus, reason);
       const nextList = orders.map(o => (o.id === orderId ? updated : o));
       onOrdersChange(nextList);
 
