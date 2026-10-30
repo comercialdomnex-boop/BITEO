@@ -346,6 +346,11 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         // ignore
       }
   
+      // Preserve the server-generated PIX for the confirmation screen.
+      // A missing QR code must remain unavailable; never create another order.
+      setConfirmedPix(orderPayload.paymentMethod === 'pix'
+        ? (receipt.pix ?? { status: 'unavailable' })
+        : null);
       // Close checkout and show confirmed view
       setIsCheckoutModalOpen(false);
       setConfirmedOrder(newOrder);
