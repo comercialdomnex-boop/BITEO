@@ -21,6 +21,7 @@ interface OnlineStoreTabProps {
   onUpdateOnline: (online: Partial<StoreOnlineSettings>) => void;
   onOpenStorefront?: () => void;
   onSaveNotice: (msg: string) => void;
+  publicationSaving?: boolean;
 }
 
 export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
@@ -28,6 +29,7 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
   onUpdateOnline,
   onOpenStorefront,
   onSaveNotice,
+  publicationSaving = false,
 }) => {
   const { online, info } = config;
 
@@ -92,7 +94,7 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
       {/* Store Published Status Banner */}
       <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#121620] to-[#161B26] border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-orange-400 shrink-0">
             <Globe className="w-6 h-6" />
           </div>
           <div>
@@ -100,17 +102,22 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
               <span className="font-bold text-white text-base">
                 Loja Pública Biteo
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Loja Publicada</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${online.isPublished ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
+                {online.isPublished ? 'Loja publicada' : 'Loja não publicada'}
               </span>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Seu cardápio digital está pronto para receber pedidos de clientes sem taxas sobre vendas.
+              {online.isPublished ? "A loja está publicada. O recebimento também depende do horário e do controle Aceitar pedidos." : "Publique a loja para permitir que clientes façam pedidos dentro do horário configurado."}
             </p>
           </div>
         </div>
 
+        <button type="button" role="switch" aria-checked={online.isPublished}
+          disabled={publicationSaving}
+          onClick={() => onUpdateOnline({ isPublished: !online.isPublished })}
+          className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold">
+          {publicationSaving ? 'Salvando…' : online.isPublished ? 'Despublicar loja' : 'Publicar loja'}
+        </button>
         {/* Quick Open Storefront Button */}
         {onOpenStorefront && (
           <Button
