@@ -1,0 +1,67 @@
+/* Merchant-only visual layer. No changes to login, storefront or business logic. */
+.merchant-theme {
+  position: relative;
+  isolation: isolate;
+  background: radial-gradient(ellipse 80% 55% at 88% -15%, rgba(255,85,0,.105), transparent 70%),
+              radial-gradient(ellipse 65% 55% at 0% 100%, rgba(97,119,169,.12), transparent 75%),
+              #1a202b !important;
+  color: #f5f7fb;
+}
+.merchant-theme::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .33;
+  background-image: radial-gradient(circle, rgba(255,168,109,.55) .8px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(120deg, transparent 12%, #000 78%);
+}
+.merchant-theme :is(aside, header) {
+  background: rgba(32,39,52,.94) !important;
+  border-color: rgba(151,165,188,.18) !important;
+  backdrop-filter: blur(18px);
+}
+.merchant-theme [class*="bg-[#13161D]"],
+.merchant-theme [class*="bg-[#0B0D10]"],
+.merchant-theme [class*="bg-[#0B0D12]"],
+.merchant-theme [class*="bg-[#0E1016]"],
+.merchant-theme [class*="bg-[#0A0C0F]"],
+.merchant-theme [class*="bg-[#0D0F14]"],
+.merchant-theme [class*="bg-zinc-900"],
+.merchant-theme [class*="bg-zinc-950"] {
+  background-color: #293242 !important;
+}
+.merchant-theme [class*="bg-zinc-850"],
+.merchant-theme [class*="bg-zinc-800"] {
+  background-color: #354052 !important;
+}
+.merchant-theme [class*="border-zinc-"],
+.merchant-theme [class*="border-[#"] {
+  border-color: rgba(164,181,204,.24) !important;
+}
+.merchant-theme [class*="text-zinc-500"] { color: #b5c1d2 !important; }
+.merchant-theme [class*="text-zinc-400"] { color: #c4cddd !important; }
+.merchant-theme [class*="text-zinc-300"] { color: #e0e7f1 !important; }
+.merchant-theme input:not([type="checkbox"]):not([type="radio"]),
+.merchant-theme textarea,
+.merchant-theme select {
+  background-color: #1e2633 !important;
+  color: #f7f9fd !important;
+  border-color: rgba(164,181,204,.3) !important;
+}
+.merchant-theme input:focus-visible,
+.merchant-theme textarea:focus-visible,
+.merchant-theme select:focus-visible {
+  outline: 2px solid rgba(255,85,0,.58);
+  outline-offset: 1px;
+  border-color: #ff5500 !important;
+}
+.merchant-theme button { transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.merchant-theme button:hover:not(:disabled) { box-shadow: 0 4px 18px rgba(255,85,0,.09); }
+.merchant-theme button:active:not(:disabled) { transform: scale(.985); }
+.merchant-theme [class*="rounded-2xl"][class*="border"] { box-shadow: 0 10px 28px rgba(4,8,16,.14); }
+@media (prefers-reduced-motion: reduce) {
+  .merchant-theme button { transition: none; }
+}
