@@ -21,7 +21,12 @@ export interface CheckoutInput {
   turnstileToken: string;
 }
 
+export type PixCheckoutResult =
+  | { status: 'awaiting_payment'; payload: string; encodedImage: string; expirationDate?: string }
+  | { status: 'unavailable' };
+
 export interface CreatedOrderResponse {
+  pix?: PixCheckoutResult;
   orderId: string;
   orderNumber: number;
   totalCents: number;
