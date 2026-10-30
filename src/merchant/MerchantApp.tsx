@@ -1,3 +1,4 @@
+import './merchantTheme.css';
 import { saveStorePublication } from '../services/storePublicationPersistence';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -230,7 +231,7 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0D10] text-zinc-100 flex flex-col md:flex-row">
+    <div className="merchant-theme min-h-screen bg-[#0B0D10] text-zinc-100 flex flex-col md:flex-row">
       {acceptanceError && <div role="alert" className="fixed bottom-20 left-4 right-4 z-50 rounded-xl bg-rose-950 p-3 text-sm text-rose-100">{acceptanceError}</div>}
       {/* Real-time Order Arrival Banner */}
       {incomingOrderNotification && (
