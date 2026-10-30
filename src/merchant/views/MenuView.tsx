@@ -213,7 +213,6 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
       showToast(`Categoria "${created.name}" criada com sucesso!`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Erro ao cadastrar categoria.');
-      throw error;
     }
   };
 
