@@ -94,6 +94,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     }
   };
 
+  const handlePaymentConfirmed = (orderId: string) => {
+    const nextOrders = orders.map(order => order.id === orderId ? { ...order, paymentStatus: 'pago' as const } : order);
+    onOrdersChange(nextOrders);
+    setActiveModalOrder(current => current?.id === orderId ? { ...current, paymentStatus: 'pago' } : current);
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
@@ -240,6 +246,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         isOpen={Boolean(activeModalOrder)}
         onClose={() => setActiveModalOrder(null)}
         onUpdateStatus={handleUpdateStatus}
+        onPaymentConfirmed={handlePaymentConfirmed}
       />
     </div>
   );
