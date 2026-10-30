@@ -33,6 +33,7 @@ export interface CreatedOrderResponse {
   status: 'novo';
 }
 
+const attempts = new Map<string, { fingerprint: string; requestId: string }>();
 export async function submitGuestOrder(input: CheckoutInput): Promise<CreatedOrderResponse> {
   const baseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -58,6 +59,16 @@ export async function submitGuestOrder(input: CheckoutInput): Promise<CreatedOrd
     })),
     turnstileToken: input.turnstileToken,
   };
+  const fingerprint = JSON.stringify({ ...body, turnstileToken: undefined });
+  const key = 'biteo_checkout_attempt_' + input.storeId;
+  let saved = attempts.get(key);
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    if (stored && typeof stored.requestId === 'string') saved = stored;
+  } catch { /* storage unavailable */ }
+  const requestId = saved?.fingerprint === fingerprint ? saved.requestId : crypto.randomUUID();
+  attempts.set(key, { fingerprint, requestId });
+  try { sessionStorage.setItem(key, JSON.stringify({ fingerprint, requestId })); } catch { /* storage unavailable */ }
 
   let response: Response;
   try {
@@ -67,7 +78,7 @@ export async function submitGuestOrder(input: CheckoutInput): Promise<CreatedOrd
         'Content-Type': 'application/json',
         apikey: anonKey,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, requestId }),
     });
   } catch {
     throw new Error('Não foi possível conectar ao servidor. Confira sua internet e tente novamente.');
@@ -85,5 +96,7 @@ export async function submitGuestOrder(input: CheckoutInput): Promise<CreatedOrd
       !('totalCents' in result) || typeof result.totalCents !== 'number') {
     throw new Error('O servidor retornou uma confirmação inválida. Consulte a loja antes de tentar novamente.');
   }
+  attempts.delete(key);
+  try { sessionStorage.removeItem(key); } catch { /* storage unavailable */ }
   return result as CreatedOrderResponse;
 }
