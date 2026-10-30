@@ -306,16 +306,10 @@ export async function saveBusinessHours(
 
     if (bhError) throw bhError;
 
-    const { error: delError } = await supabase
-      .from('business_hour_periods')
-      .delete()
-      .eq('store_id', storeId)
-      .eq('weekday', weekday);
-
-    if (delError) throw delError;
-
-    if (day.isOpen && day.periods.length > 0) {
-      const periodsToInsert = day.periods.map((period, idx) => ({
+    // Keep saved times even when the day is closed. Upsert the unique position
+    // instead of delete + insert (which can race with another autosave).
+    if (day.periods.length > 0) {
+      const periodsToSave = day.periods.map((period, idx) => ({
         store_id: storeId,
         weekday,
         opens_at: `${period.open}:00`,
@@ -323,11 +317,21 @@ export async function saveBusinessHours(
         sort_order: idx,
       }));
 
-      const { error: insError } = await supabase
+      const { error: periodError } = await supabase
         .from('business_hour_periods')
-        .insert(periodsToInsert);
+        .upsert(periodsToSave, { onConflict: 'store_id,weekday,sort_order' });
 
-      if (insError) throw insError;
+      if (periodError) throw periodError;
+
+      // Only remove superseded legacy periods after the replacement succeeded.
+      const { error: cleanupError } = await supabase
+        .from('business_hour_periods')
+        .delete()
+        .eq('store_id', storeId)
+        .eq('weekday', weekday)
+        .gte('sort_order', periodsToSave.length);
+
+      if (cleanupError) throw cleanupError;
     }
   }
 }
