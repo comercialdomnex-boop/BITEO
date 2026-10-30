@@ -297,53 +297,63 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       turnstileToken: orderPayload.turnstileToken,
     });
 
-    // First order must be derived from this store's own history.
-    const isFirstOrder = !(await OrderService.hasPreviousOrder(customerPhone));
-
-    const newOrder = await OrderService.createOrder({
-      customer: {
-        id: `cust_${Date.now()}`,
-        name: orderPayload.customer.name,
-        phone: customerPhone,
-        isFirstOrder,
-      },
-      items: formattedOrderItems,
-      itemsCount: formattedOrderItems.reduce((acc, i) => acc + i.quantity, 0),
-      type: orderPayload.type,
-      subtotal: orderPayload.subtotal,
-      deliveryFee: orderPayload.deliveryFee,
-      discount: 0,
-      total: fromCents(receipt.totalCents),
-      paymentMethod: orderPayload.paymentMethod,
-      paymentStatus: orderPayload.paymentStatus,
-      changeFor: orderPayload.changeFor,
-      deliveryAddress: orderPayload.deliveryAddress,
-      generalNotes: orderPayload.generalNotes,
-      estimatedTimeMin:
-        orderPayload.type === 'delivery'
-          ? parseInt(delivery.estimatedDeliveryTime) || 45
-          : parseInt(delivery.estimatedPickupTime) || 20,
-    }, { orderId: receipt.orderId, orderNumber: receipt.orderNumber });
-
-    // Notify parent App and Merchant
-    if (onOrderPlaced) {
-      onOrderPlaced(newOrder);
-    }
-
-    // Play chime
-    playOrderNotificationSound();
-
-    // Clear cart
-    setCartItems([]);
+    // A confirmação do Supabase já é definitiva neste ponto. Falhas na
+    // projeção local ou em notificações nunca devem provocar um segundo POST.
     try {
-      localStorage.removeItem(`biteo_cart_${storeConfig.id}`);
-    } catch {
-      // ignore
+      // First order must be derived from this store's own history.
+      const isFirstOrder = !(await OrderService.hasPreviousOrder(customerPhone));
+  
+      const newOrder = await OrderService.createOrder({
+        customer: {
+          id: `cust_${Date.now()}`,
+          name: orderPayload.customer.name,
+          phone: customerPhone,
+          isFirstOrder,
+        },
+        items: formattedOrderItems,
+        itemsCount: formattedOrderItems.reduce((acc, i) => acc + i.quantity, 0),
+        type: orderPayload.type,
+        subtotal: orderPayload.subtotal,
+        deliveryFee: orderPayload.deliveryFee,
+        discount: 0,
+        total: fromCents(receipt.totalCents),
+        paymentMethod: orderPayload.paymentMethod,
+        paymentStatus: orderPayload.paymentStatus,
+        changeFor: orderPayload.changeFor,
+        deliveryAddress: orderPayload.deliveryAddress,
+        generalNotes: orderPayload.generalNotes,
+        estimatedTimeMin:
+          orderPayload.type === 'delivery'
+            ? parseInt(delivery.estimatedDeliveryTime) || 45
+            : parseInt(delivery.estimatedPickupTime) || 20,
+      }, { orderId: receipt.orderId, orderNumber: receipt.orderNumber });
+  
+      // Notify parent App and Merchant
+      if (onOrderPlaced) {
+        onOrderPlaced(newOrder);
+      }
+  
+      // Play chime
+      playOrderNotificationSound();
+  
+      // Clear cart
+      setCartItems([]);
+      try {
+        localStorage.removeItem(`biteo_cart_${storeConfig.id}`);
+      } catch {
+        // ignore
+      }
+  
+      // Close checkout and show confirmed view
+      setIsCheckoutModalOpen(false);
+      setConfirmedOrder(newOrder);
+    } catch (error) {
+      console.error('Pedido confirmado no servidor; falha na apresentação local', error);
+      setCartItems([]);
+      try { localStorage.removeItem(`biteo_cart_${storeConfig.id}`); } catch { /* storage indisponível */ }
+      setIsCheckoutModalOpen(false);
+      window.alert(`Pedido #${receipt.orderNumber} recebido pela loja. Houve um problema ao exibir a confirmação; NÃO envie novamente. Consulte o estabelecimento.`);
     }
-
-    // Close checkout and show confirmed view
-    setIsCheckoutModalOpen(false);
-    setConfirmedOrder(newOrder);
   };
 
   return (
