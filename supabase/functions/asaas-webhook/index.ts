@@ -29,12 +29,13 @@ Deno.serve(async (request) => {
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!url || !key) return new Response('Unavailable', { status: 503 });
     const client = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-    const { error } = await client.rpc('confirm_asaas_pix_payment', {
+    const { data: confirmed, error } = await client.rpc('confirm_asaas_pix_payment', {
       p_provider_payment_id: payment.id, p_order_id: orderId,
       p_amount_cents: amount, p_event: body.event,
     });
     if (error) return new Response('Unable to confirm', { status: 503 });
-    return new Response('OK');
+    if (typeof confirmed !== 'boolean') return new Response('Unexpected RPC result', { status: 503 });
+    return new Response(confirmed ? 'Confirmed' : 'Already confirmed');
   } catch {
     return new Response('Retry later', { status: 503 });
   }
