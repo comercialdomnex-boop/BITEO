@@ -26,6 +26,7 @@ import { HoursTab } from './store/HoursTab';
 import { DeliveryTab } from './store/DeliveryTab';
 import { PaymentsTab } from './store/PaymentsTab';
 import { OnlineStoreTab } from './store/OnlineStoreTab';
+import { WhatsAppTab } from './store/WhatsAppTab';
 import { StorePreviewPhone } from './store/StorePreviewPhone';
 import { Modal, Button } from '../../components/shared';
 import {
@@ -41,6 +42,7 @@ import {
   AlertCircle,
   Loader2,
   Share2,
+  MessageCircle,
 } from 'lucide-react';
 
 export type StoreTab =
@@ -49,6 +51,7 @@ export type StoreTab =
   | 'horarios'
   | 'entrega'
   | 'pagamentos'
+  | 'whatsapp'
   | 'online';
 
 interface MyStoreViewProps {
@@ -307,6 +310,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
     { id: 'horarios', label: 'Horários', icon: Clock },
     { id: 'entrega', label: 'Entrega & Retirada', icon: Bike },
     { id: 'pagamentos', label: 'Pagamentos', icon: CreditCard },
+    { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
     { id: 'online', label: 'Loja Online', icon: Globe },
   ];
 
@@ -477,6 +481,10 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
               onUpdatePayments={handleUpdatePayments}
               onSaveNotice={showToast}
             />
+          )}
+
+          {activeTab === 'whatsapp' && (
+            <WhatsAppTab storeName={config.info.name} />
           )}
 
           {activeTab === 'online' && (
