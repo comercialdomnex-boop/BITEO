@@ -1,4 +1,3 @@
-import { provisionPixForOrder } from '../_shared/provision-pix.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const MAX_BYTES = 32768;
@@ -85,22 +84,9 @@ Deno.serve(async (req) => {
       console.error('create_guest_order failed', error.code);
       return respond(400, { error: 'Não foi possível finalizar o pedido. Confira os dados.' }, headers);
     }
-    // The order is already committed. A PIX provider failure must never invite
-    // the customer to resubmit the order and accidentally create duplicates.
-    if (payload.paymentMethod === 'pix') {
-      const receipt = data as { orderId: string; orderNumber: number; totalCents: number; status: string };
-      const customer = payload.customer as { name?: string } | undefined;
-      let pix: Awaited<ReturnType<typeof provisionPixForOrder>> = { status: 'unavailable' };
-      try {
-        pix = await provisionPixForOrder(
-          supabase, receipt, String(payload.storeId), String(customer?.name ?? ''),
-        );
-      } catch (pixError) {
-        console.error('PIX failed after order commit',
-          pixError instanceof Error ? pixError.name : 'unknown');
-      }
-      return respond(201, { ...receipt, pix }, headers);
-    }
+    // Payments are handled directly by the store. Do not create Asaas charges.
+    // The database records payment_status='pendente' until merchant verification.
+    // Never report a PIX as paid solely because an order was created.
     return respond(201, data, headers);
   } catch (error) {
     if (error instanceof Error && error.message === 'too_large') return respond(413, { error: 'Pedido muito grande.' }, headers);
