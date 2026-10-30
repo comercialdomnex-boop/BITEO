@@ -862,9 +862,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                          <span>PIX Instantâneo</span>
+                          <span>PIX — aguardando pagamento</span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300">
-                            Aprovação Imediata
+                            Confirmação após pagamento
                           </span>
                         </h4>
                         <p className="text-[11px] text-zinc-400">
