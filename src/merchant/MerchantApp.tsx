@@ -1,3 +1,4 @@
+import { saveStorePublication } from '../services/storePublicationPersistence';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   RestaurantProfile,
@@ -140,17 +141,26 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
     if (!canEditStore || currentRole === null || acceptanceInFlight.current) return;
     acceptanceInFlight.current = true;
     const storeId = storeConfig.id;
+    const opening = !storeConfig.operations.acceptingOrders;
     setAcceptanceSaving(true);
     setAcceptanceError(null);
     try {
-      const acceptingOrders = await saveOrderAcceptance(storeId, !storeConfig.operations.acceptingOrders);
-      // A request from the previous store must never overwrite a new active store.
+      // Opening publishes the storefront first, then enables checkout.
+      // Closing only pauses orders; the menu remains available to browse.
+      if (opening && !storeConfig.online.isPublished) {
+        await saveStorePublication(storeId, true);
+      }
+      const acceptingOrders = await saveOrderAcceptance(storeId, opening);
       if (latestConfig.current.id !== storeId) return;
       const current = latestConfig.current;
-      onUpdateStoreConfig({ ...current, operations: { ...current.operations, acceptingOrders } });
+      onUpdateStoreConfig({
+        ...current,
+        online: { ...current.online, isPublished: opening ? true : current.online.isPublished },
+        operations: { ...current.operations, acceptingOrders },
+      });
     } catch (error) {
       if (latestConfig.current.id === storeId) {
-        setAcceptanceError(error instanceof Error ? error.message : 'Não foi possível salvar. Tente novamente.');
+        setAcceptanceError(error instanceof Error ? error.message : 'Não foi possível alterar o estado da loja.');
       }
     } finally {
       acceptanceInFlight.current = false;
