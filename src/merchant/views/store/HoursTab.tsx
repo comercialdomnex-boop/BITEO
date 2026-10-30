@@ -1,7 +1,7 @@
 import React from 'react';
-import { StoreConfig, BusinessHours, DaySchedule, TimePeriod } from '../../../types';
+import { StoreConfig, BusinessHours } from '../../../types';
 import { evaluateSchedule } from '../../../utils/hours';
-import { Clock, Plus, Trash2 } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 interface HoursTabProps {
   config: StoreConfig;
@@ -12,63 +12,35 @@ interface HoursTabProps {
 export const HoursTab: React.FC<HoursTabProps> = ({
   config,
   onUpdateHours,
-  onSaveNotice,
 }) => {
   const { hours } = config;
   const liveStatus = evaluateSchedule(hours);
 
   const handleToggleDay = (dayIndex: number) => {
-    const nextSchedule = [...hours.schedule];
-    const day = nextSchedule[dayIndex];
-    day.isOpen = !day.isOpen;
-
-    // If opening and has no periods, add standard period
-    if (day.isOpen && day.periods.length === 0) {
-      day.periods.push({
+    const nextSchedule = hours.schedule.map((day, index) => index !== dayIndex ? day : {
+      ...day,
+      isOpen: !day.isOpen,
+      periods: day.periods.length > 0 ? day.periods : [{
         id: `p_${Date.now()}`,
         open: '11:00',
         close: '23:00',
-      });
-    }
-
-    onUpdateHours({ ...hours, schedule: nextSchedule });
-    onSaveNotice(`Horário de ${day.label} atualizado.`);
-  };
-
-  const handleAddPeriod = (dayIndex: number) => {
-    const nextSchedule = [...hours.schedule];
-    const day = nextSchedule[dayIndex];
-    day.periods.push({
-      id: `p_${Date.now()}_${Math.random()}`,
-      open: '18:00',
-      close: '23:00',
+      }],
     });
-    onUpdateHours({ ...hours, schedule: nextSchedule });
-  };
-
-  const handleRemovePeriod = (dayIndex: number, periodId: string) => {
-    const nextSchedule = [...hours.schedule];
-    const day = nextSchedule[dayIndex];
-    day.periods = day.periods.filter(p => p.id !== periodId);
-    if (day.periods.length === 0) {
-      day.isOpen = false;
-    }
     onUpdateHours({ ...hours, schedule: nextSchedule });
   };
 
   const handleUpdatePeriodTime = (
     dayIndex: number,
-    periodId: string,
     field: 'open' | 'close',
     value: string
   ) => {
-    const nextSchedule = [...hours.schedule];
-    const day = nextSchedule[dayIndex];
-    const period = day.periods.find(p => p.id === periodId);
-    if (period) {
-      period[field] = value;
-      onUpdateHours({ ...hours, schedule: nextSchedule });
-    }
+    if (!value) return;
+    const nextSchedule = hours.schedule.map((day, index) => index !== dayIndex ? day : {
+      ...day,
+      // Legacy periods remain intact until the merchant explicitly edits this day.
+      periods: [{ ...day.periods[0], [field]: value }],
+    });
+    onUpdateHours({ ...hours, schedule: nextSchedule });
   };
 
   return (
@@ -112,7 +84,7 @@ export const HoursTab: React.FC<HoursTabProps> = ({
             Grade Semanal de Atendimento
           </h3>
           <span className="text-[11px] text-zinc-500">
-            Suporta múltiplos turnos (ex: almoço e jantar)
+            Um período de abertura e fechamento por dia
           </span>
         </div>
 
@@ -149,30 +121,27 @@ export const HoursTab: React.FC<HoursTabProps> = ({
                       Fechado o dia todo
                     </span>
                   )}
-                  {day.isOpen && (
-                    <button
-                      type="button"
-                      onClick={() => handleAddPeriod(dayIndex)}
-                      className="text-xs text-orange-400 hover:text-orange-300 font-medium flex items-center gap-1"
-                      title="Adicionar segundo período (ex: jantar)"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Adicionar Turno</span>
-                    </button>
-                  )}
+
                 </div>
               </div>
+
+              {day.periods.length > 1 && (
+                <p className="pl-14 text-xs text-amber-400">
+                  Horários anteriores preservados: {day.periods.map(p => `${p.open} às ${p.close}`).join('; ')}.
+                  {' '}Ao editar o horário deste dia, eles serão substituídos pelo período exibido abaixo.
+                </p>
+              )}
 
               {/* Time Periods */}
               {day.isOpen && (
                 <div className="pl-14 space-y-2">
-                  {day.periods.map((period, pIndex) => (
+                  {day.periods.slice(0, 1).map(period => (
                     <div
                       key={period.id}
                       className="flex items-center gap-2 text-xs flex-wrap"
                     >
                       <span className="text-zinc-500 font-mono text-[11px] w-12">
-                        Turno {pIndex + 1}:
+                        Horário:
                       </span>
 
                       <div className="flex items-center gap-1.5 bg-[#0A0C0F] border border-zinc-800 rounded-xl px-2.5 py-1">
@@ -183,7 +152,6 @@ export const HoursTab: React.FC<HoursTabProps> = ({
                           onChange={e =>
                             handleUpdatePeriodTime(
                               dayIndex,
-                              period.id,
                               'open',
                               e.target.value
                             )
@@ -197,7 +165,6 @@ export const HoursTab: React.FC<HoursTabProps> = ({
                           onChange={e =>
                             handleUpdatePeriodTime(
                               dayIndex,
-                              period.id,
                               'close',
                               e.target.value
                             )
@@ -206,16 +173,7 @@ export const HoursTab: React.FC<HoursTabProps> = ({
                         />
                       </div>
 
-                      {day.periods.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePeriod(dayIndex, period.id)}
-                          className="p-1 text-zinc-500 hover:text-rose-400 rounded transition-colors"
-                          title="Remover este turno"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+
                     </div>
                   ))}
                 </div>
