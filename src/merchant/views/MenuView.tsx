@@ -34,6 +34,8 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [menuLoadError, setMenuLoadError] = useState<string | null>(null);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -42,16 +44,38 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
 
   // Initial load
   const loadMenuData = async () => {
-    const [cats, prods] = await Promise.all([
-      MenuService.getCategories(storeId),
-      MenuService.getItems(storeId),
-    ]);
-    setCategories(cats);
-    setItems(prods);
+    setIsLoadingMenu(true);
+    try {
+      const [cats, prods] = await Promise.all([
+        MenuService.getCategories(storeId),
+        MenuService.getItems(storeId),
+      ]);
+      setCategories(cats);
+      setItems(prods);
+      setMenuLoadError(null);
+    } catch (error) {
+      setMenuLoadError(error instanceof Error ? error.message : 'Falha ao carregar o cardápio.');
+      throw error;
+    } finally {
+      setIsLoadingMenu(false);
+    }
   };
 
   useEffect(() => {
-    loadMenuData();
+    let cancelled = false;
+    setIsLoadingMenu(true);
+    Promise.all([MenuService.getCategories(storeId), MenuService.getItems(storeId)])
+      .then(([cats, prods]) => {
+        if (cancelled) return;
+        setCategories(cats);
+        setItems(prods);
+        setMenuLoadError(null);
+      })
+      .catch(error => {
+        if (!cancelled) setMenuLoadError(error instanceof Error ? error.message : 'Falha ao carregar o cardápio.');
+      })
+      .finally(() => { if (!cancelled) setIsLoadingMenu(false); });
+    return () => { cancelled = true; };
   }, [storeId]);
 
   // Filtered Items logic
@@ -125,8 +149,8 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
         await loadMenuData();
         showToast(`Produto "${created.name}" cadastrado com sucesso!`);
       }
-    } catch {
-      showToast('Ocorreu um erro ao salvar o produto.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Ocorreu um erro ao salvar o produto.');
     }
   };
 
@@ -183,9 +207,13 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
     name: string;
     description?: string;
   }) => {
-    const created = await MenuService.createCategory(storeId, data);
-    await loadMenuData();
-    showToast(`Categoria "${created.name}" criada com sucesso!`);
+    try {
+      const created = await MenuService.createCategory(storeId, data);
+      await loadMenuData();
+      showToast(`Categoria "${created.name}" criada com sucesso!`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Erro ao cadastrar categoria.');
+    }
   };
 
   const handleUpdateCategory = async (
@@ -232,6 +260,13 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
 
   return (
     <div className="space-y-5 pb-24">
+      {isLoadingMenu && <p role="status" className="text-xs text-zinc-400">Carregando cardápio...</p>}
+      {menuLoadError && (
+        <div role="alert" className="rounded-xl border border-red-500/50 bg-red-950/30 p-4 text-sm text-red-200">
+          Não foi possível carregar o cardápio: {menuLoadError}
+          <button type="button" className="ml-3 underline" onClick={() => { void loadMenuData().catch(() => {}); }}>Tentar novamente</button>
+        </div>
+      )}
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-16 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 p-3.5 bg-zinc-900 border border-orange-500/50 text-orange-200 text-xs font-semibold rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in fade-in slide-in-from-top-3">
