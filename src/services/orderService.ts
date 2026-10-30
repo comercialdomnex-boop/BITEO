@@ -1,4 +1,5 @@
 import { StoreService } from './storeService';
+import { persistOrderStatus } from './merchantOrderPersistence';
 import { RestaurantService } from './restaurantService';
 import {
   Order,
@@ -254,6 +255,7 @@ export class OrderService {
       );
     }
 
+    await persistOrderStatus(order.id, newStatus, reason);
     const now = new Date().toISOString();
 
     const getHistoryLabel = (st: OrderStatus): string => {
