@@ -92,6 +92,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
 
   // Confirmed Order State for Live Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
 
 
   // Sync cart changes to localStorage
@@ -336,6 +337,12 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       turnstileToken: orderPayload.turnstileToken,
     });
 
+    if (publicMode && receipt.trackingToken && /^[0-9a-f]{64}$/.test(receipt.trackingToken)) {
+      const url = `${window.location.origin}/${storeConfig.online.slug}#/pedido/${receipt.trackingToken}`;
+      setTrackingUrl(url);
+      try { localStorage.setItem(`biteo_last_tracking_${storeConfig.id}`, url); } catch { /* storage disabled */ }
+    }
+
     // A confirmação do Supabase já é definitiva neste ponto. Falhas na
     // projeção local ou em notificações nunca devem provocar um segundo POST.
     try {
@@ -461,6 +468,11 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         </div>
       </header>
 
+      {publicMode && !confirmedOrder && (() => {
+        let lastUrl: string | null = null;
+        try { lastUrl = localStorage.getItem(`biteo_last_tracking_${storeConfig.id}`); } catch { /* unavailable */ }
+        return lastUrl ? <div className="mx-auto max-w-4xl px-4 pt-3"><a className="text-sm text-orange-400 underline" href={lastUrl}>Acompanhar meu último pedido</a></div> : null;
+      })()}
       {/* If an order was just confirmed, render the tracking screen */}
       {confirmedOrder ? (
         (() => {
@@ -470,6 +482,8 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
               : confirmedOrder;
 
           return (
+            <div>
+            {publicMode && trackingUrl && <div className="mx-auto max-w-4xl px-4 py-4"><a className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white inline-block" href={trackingUrl}>Acompanhar pedido e salvar link</a></div>}
             <OrderConfirmedView
               order={liveOrder}
 
@@ -483,6 +497,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
               primaryColor={theme.primaryColor}
               visualStyle={theme.visualStyle}
             />
+            </div>
           );
         })()
       ) : (
