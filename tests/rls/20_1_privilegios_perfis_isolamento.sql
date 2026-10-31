@@ -115,7 +115,11 @@ select rls_check.t('01 privilegios e grants','SISTEMA','anon nao tem SELECT em n
   'val:0');
 
 select rls_check.t('01 privilegios e grants','SISTEMA','authenticated tem SELECT em todas as tabelas de negocio','postgres',null,
-  $sql$select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('store_counters','order_access_tokens') and c.relname not like '__rls%' and not has_table_privilege('authenticated', c.oid, 'select')$sql$,
+  $sql$select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('store_counters','order_access_tokens','order_pix_payments','checkout_idempotency','store_whatsapp_connections','order_whatsapp_consents','order_whatsapp_outbox') and c.relname not like '__rls%' and not has_table_privilege('authenticated', c.oid, 'select')$sql$,
+  'val:0');
+
+select rls_check.t('01 privilegios e grants','SISTEMA','clientes sem nenhum privilegio nas tabelas internas de pagamento e WhatsApp','postgres',null,
+  $sql$select count(*)::text from unnest(array['public.order_pix_payments','public.checkout_idempotency','public.store_whatsapp_connections','public.order_whatsapp_consents','public.order_whatsapp_outbox']) t(n) cross join unnest(array['anon','authenticated']) r(role) where has_table_privilege(r.role, t.n, 'select,insert,update,delete,truncate,references,trigger')$sql$,
   'val:0');
 
 select rls_check.t('01 privilegios e grants','SISTEMA','authenticated executa public.set_order_status','postgres',null,

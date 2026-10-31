@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '../components/shared';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { useAuth } from './AuthProvider';
+import { BiteoParticles } from '../components/BiteoParticles';
 import {
   Mail,
   Lock,
@@ -57,7 +58,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
   return (
     <div className="min-h-screen bg-[#07080A] text-zinc-100 flex flex-col md:flex-row font-['Plus_Jakarta_Sans',sans-serif]">
       {/* LEFT COLUMN: Premium SaaS Branding (Visible on Tablet/Desktop) */}
-      <div className="hidden lg:flex flex-1 flex-col justify-between p-10 xl:p-14 bg-gradient-to-br from-[#0B0D13] via-[#0F1219] to-[#151924] border-r border-zinc-850 relative overflow-hidden">
+      <div className="hidden lg:flex flex-1 flex-col justify-between p-10 xl:p-14 bg-gradient-to-br from-[#0B0D13] via-[#0F1219] to-[#151924] border-r border-zinc-850 relative isolate overflow-hidden">
+        {/* Animated BITEO particles */}
+        <BiteoParticles />
+
         {/* Glow ambient light */}
         <div className="absolute top-1/4 -left-20 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />

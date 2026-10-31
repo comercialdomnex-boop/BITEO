@@ -41,6 +41,20 @@ grant execute on all functions in schema public to authenticated;
 revoke all on public.store_counters from authenticated;
 revoke all on public.order_access_tokens from authenticated;
 
+-- Tabelas internas de pagamento / WhatsApp (20261030110000, 20261030120000,
+-- 20261030180000, reafirmadas em 20261031180000): sem acesso de cliente.
+revoke all on public.order_pix_payments from authenticated;
+revoke all on public.checkout_idempotency from authenticated;
+revoke all on public.store_whatsapp_connections from authenticated;
+revoke all on public.order_whatsapp_consents from authenticated;
+revoke all on public.order_whatsapp_outbox from authenticated;
+
+-- Funcoes exclusivas de service_role (20261030113000 / 20261031120000 /
+-- 20261031180000): o "grant execute on all functions" acima simula o default
+-- ACL, mas as migrations revogam logo apos criar cada funcao.
+revoke all on function public.confirm_asaas_pix_payment(text, uuid, integer, text) from authenticated;
+revoke all on function public.create_guest_order(jsonb) from authenticated;
+
 -- 7B.3.1: nenhum cliente insere nas tabelas de pedido
 revoke insert on public.orders from authenticated;
 revoke insert on public.order_items from authenticated;
@@ -72,7 +86,7 @@ grant update (
   delivery_area_name,
   estimated_minutes,
   payment_method,
-  payment_status,
+  -- payment_status: sem UPDATE direto desde 20261031120000 (somente RPCs).
   notes
 ) on public.orders to authenticated;
 

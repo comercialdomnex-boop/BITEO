@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Building } from 'lucide-react';
 import {
   RestaurantProfile,
   Order,
@@ -15,16 +16,6 @@ import { useAuth } from './auth/AuthProvider';
 import { OnboardingWizard } from './onboarding/OnboardingWizard';
 import { SessionService } from './services/sessionService';
 import { RestaurantService } from './services/restaurantService';
-import {
-  Smartphone,
-  Monitor,
-  Store,
-  LayoutDashboard,
-  LogOut,
-  User,
-  Building,
-  ChevronDown,
-} from 'lucide-react';
 
 export type AppRoute =
   | 'login'
@@ -45,7 +36,6 @@ export default function App() {
     createEmptyStoreConfig()
   );
   const [orders, setOrders] = useState<Order[]>([]);
-  const [deviceFrame, setDeviceFrame] = useState<boolean>(false);
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
   // Store context boot: 'idle' until authenticated, then loading the real stores.
   const [storeBoot, setStoreBoot] = useState<'idle' | 'loading' | 'ready' | 'error'>(
@@ -55,10 +45,18 @@ export default function App() {
   // Bumped by the retry button to re-run the store hydration effect.
   const [bootNonce, setBootNonce] = useState(0);
 
+  const [availabilityTime, setAvailabilityTime] = useState(() => new Date());
+  useEffect(() => {
+    const refresh = () => setAvailabilityTime(new Date());
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, []);
+
   /** Derived read-only projection: never a second writable source. */
   const restaurant: RestaurantProfile = useMemo(
-    () => RestaurantService.buildProfile(storeConfig),
-    [storeConfig]
+    () => RestaurantService.buildProfile(storeConfig, availabilityTime),
+    [storeConfig, availabilityTime]
   );
 
   // Single writable source for the active store: mirrors it into React state and
@@ -178,6 +176,7 @@ export default function App() {
 
   // Single writable source: the store config. The restaurant profile is derived.
   const handleUpdateStoreConfig = (updated: StoreConfig) => {
+    StoreService.registerStore(updated.id, updated);
     setStoreConfig(updated);
     if (currentStore) {
       SessionService.updateStoreData(currentStore.id, {
@@ -288,8 +287,16 @@ export default function App() {
         );
 
       case 'onboarding':
-        return (
-          <OnboardingWizard
+  if (status !== 'authenticated' || !currentUser) {
+    return (
+      <LoginView
+        onGoToRegister={() => setCurrentRoute('cadastro')}
+      />
+    );
+  }
+
+  return (
+    <OnboardingWizard
             onComplete={handleOnboardingComplete}
             onCancel={
               currentUser && availableStores.length > 0
@@ -312,12 +319,20 @@ export default function App() {
           />
         );
 
-      case 'merchant':
-      default:
-        return (
-          <MerchantApp
-            restaurant={restaurant}
-            storeConfig={storeConfig}
+    case 'merchant':
+default:
+  if (status !== 'authenticated' || !currentUser) {
+    return (
+      <LoginView
+        onGoToRegister={() => setCurrentRoute('cadastro')}
+      />
+    );
+  }
+
+  return (
+    <MerchantApp
+      restaurant={restaurant}
+      storeConfig={storeConfig}
             orders={orders}
             forceMobileLayout={isFramed}
             initialSelectedOrderId={highlightOrderId}
@@ -337,165 +352,16 @@ export default function App() {
     }
   };
 
-  const isAuthenticated = Boolean(currentUser || currentStore);
-
   return (
     <div className="min-h-screen bg-[#07080A] text-zinc-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
-      {/* Top Device & Module Navigation Bar (Visible on desktop/tablet to test both views) */}
-      <aside
-        className="hidden md:flex items-center justify-between px-4 py-2 bg-[#0B0D12] border-b border-zinc-850 text-xs text-zinc-400 select-none"
-        aria-label="Controles de Navegação e Visualização"
-      >
-        {/* Brand & Route Context */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 font-bold text-white tracking-wider">
-            <span className="w-2 h-2 rounded-full bg-[#FF5500]" />
-            <span>BITEO PLATFORM</span>
-          </div>
-          <span className="text-zinc-600">|</span>
-          <span className="text-zinc-400 text-[11px]">
-            SaaS Multi-Lojas para Restaurantes & Delivery
-          </span>
-
-          {/* Quick Route Status Pill */}
-          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-850 text-zinc-300 border border-zinc-750">
-            /{currentRoute}
-            {currentRoute === 'storefront' && storeConfig.online?.slug
-              ? `/${storeConfig.online.slug}`
-              : ''}
-          </span>
-
-          {/* Real profile load problem (grants/RLS/network) surfaced, never hidden */}
-          {profileError && (
-            <span
-              title={profileError}
-              className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30"
-            >
-              perfil não carregado
-            </span>
-          )}
+      {profileError && (
+        <div role="alert" className="px-4 py-3 text-sm text-amber-200 bg-amber-950/80 border-b border-amber-600/40">
+          Não foi possível carregar o perfil: {profileError}
         </div>
-
-        {/* View Switchers & Controls */}
-        <div className="flex items-center gap-2.5">
-          {/* Route Switchers */}
-          <div className="flex items-center bg-zinc-900 p-0.5 rounded-lg border border-zinc-800">
-            <>
-              <button
-                onClick={() => setCurrentRoute('login')}
-                type="button"
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                  currentRoute === 'login'
-                    ? 'bg-orange-500 text-white font-semibold shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Entrar
-              </button>
-              <button
-                onClick={() => setCurrentRoute('cadastro')}
-                type="button"
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                  currentRoute === 'cadastro'
-                    ? 'bg-orange-500 text-white font-semibold shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Criar Conta
-              </button>
-            </>
-                <button
-                  onClick={() => setCurrentRoute('merchant')}
-                  type="button"
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    currentRoute === 'merchant'
-                      ? 'bg-orange-500 text-white font-semibold shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5" />
-                  <span>Painel Merchant</span>
-                </button>
-
-                <button
-                  onClick={() => setCurrentRoute('storefront')}
-                  type="button"
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    currentRoute === 'storefront'
-                      ? 'bg-orange-500 text-white font-semibold shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  <span>Loja do Consumidor</span>
-                </button>
-          </div>
-
-          {/* Current Store Badge if a store is active */}
-          {currentStore && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="font-semibold text-white max-w-[120px] truncate">
-                {currentStore.name}
-              </span>
-            </div>
-          )}
-
-          {/* Logout if authenticated */}
-          {isAuthenticated && (
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-850 transition-colors"
-              title="Sair da conta e voltar ao login"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          {/* Device Frame Toggle */}
-          <div className="flex items-center bg-zinc-900 p-0.5 rounded-lg border border-zinc-800">
-            <button
-              onClick={() => setDeviceFrame(false)}
-              type="button"
-              className={`p-1.5 rounded-md transition-colors ${
-                !deviceFrame ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-              title="Visualização Fluida / Responsiva"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setDeviceFrame(true)}
-              type="button"
-              className={`p-1.5 rounded-md transition-colors ${
-                deviceFrame ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-              title="Visualização em moldura de smartphone"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main View Area */}
-      <div className="flex-1 flex justify-center items-start">
-        {deviceFrame ? (
-          // Mobile Mockup Frame for testing smartphone experience on large monitors
-          <div className="my-6 w-full max-w-[420px] min-h-[820px] max-h-[92vh] overflow-y-auto rounded-[40px] border-4 border-zinc-800 shadow-2xl shadow-black bg-[#0B0D10] relative flex flex-col no-scrollbar">
-            {/* Dynamic island / speaker notch */}
-            <div className="sticky top-0 z-50 pt-2 pb-1 bg-[#0B0D10]/95 flex justify-center shrink-0">
-              <div className="w-24 h-4 bg-zinc-900 rounded-full border border-zinc-800" />
-            </div>
-
-            <div className="flex-1">{renderCurrentView(true)}</div>
-          </div>
-        ) : (
-          // Full responsive fluid view (default mobile-first)
-          <div className="w-full">{renderCurrentView(false)}</div>
-        )}
-      </div>
+      )}
+      <main className="flex-1 w-full">
+        {renderCurrentView(false)}
+      </main>
     </div>
   );
 }

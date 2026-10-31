@@ -24,7 +24,8 @@ $parteTestes = @(
   '20_2_matriz.sql',
   '20_3_escalada_attendant.sql',
   '20_4_insert_estado_negadas_anon.sql',
-  '20_5_create_first_store.sql'
+  '20_5_create_first_store.sql',
+  '20_6_pagamentos.sql'
 )
 
 function Read-Part([string]$nome) {

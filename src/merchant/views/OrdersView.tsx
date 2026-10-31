@@ -7,6 +7,9 @@ import { OrderCard } from '../components/OrderCard';
 import { OrderDetailModal } from '../components/OrderDetailModal';
 import { SearchInput, Button } from '../../components/shared';
 import { phoneIdentity } from '../../utils/phone';
+import { isWaitingPrepaidPayment } from '../../utils/paymentRules';
+
+type PaymentFilter = 'todos' | 'aguardando_pix' | 'pendente' | 'pago';
 import { Plus, RefreshCw, ShoppingBag } from 'lucide-react';
 
 interface OrdersViewProps {
@@ -20,6 +23,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | 'todos'>('todos');
   const [selectedType, setSelectedType] = useState<OrderType | 'todos'>('todos');
+  const [selectedPayment, setSelectedPayment] = useState<PaymentFilter>('todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeModalOrder, setActiveModalOrder] = useState<Order | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -36,6 +40,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       todos: orders.length,
       novo: orders.filter(o => o.status === 'novo').length,
       em_preparo: orders.filter(o => o.status === 'em_preparo').length,
+      pronto: orders.filter(o => o.status === 'pronto').length,
       em_entrega: orders.filter(o => o.status === 'em_entrega').length,
       concluido: orders.filter(o => o.status === 'concluido').length,
       cancelado: orders.filter(o => o.status === 'cancelado').length,
@@ -53,6 +58,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       if (selectedType !== 'todos' && order.type !== selectedType) {
         return false;
       }
+      // Payment filter (independent from preparation status)
+      if (selectedPayment === 'aguardando_pix' && !isWaitingPrepaidPayment(order)) return false;
+      if (selectedPayment === 'pendente' && (order.paymentStatus !== 'pendente' || order.status === 'cancelado')) return false;
+      if (selectedPayment === 'pago' && order.paymentStatus !== 'pago') return false;
       // Search filter
       if (searchQuery.trim().length > 0) {
         const q = searchQuery.toLowerCase().trim();
@@ -73,12 +82,18 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       }
       return true;
     });
-  }, [orders, selectedStatus, selectedType, searchQuery]);
+  }, [orders, selectedStatus, selectedType, selectedPayment, searchQuery]);
 
-  const handleUpdateStatus = async (orderOrId: string | Order, newStatus: OrderStatus) => {
+  const paymentCounts = useMemo(() => ({
+    aguardando_pix: orders.filter(isWaitingPrepaidPayment).length,
+    pendente: orders.filter(o => o.paymentStatus === 'pendente' && o.status !== 'cancelado').length,
+    pago: orders.filter(o => o.paymentStatus === 'pago').length,
+  }), [orders]);
+
+  const handleUpdateStatus = async (orderOrId: string | Order, newStatus: OrderStatus, reason?: string) => {
     const orderId = typeof orderOrId === 'string' ? orderOrId : orderOrId.id;
     try {
-      const updated = await OrderService.updateOrderStatus(orderId, newStatus);
+      const updated = await OrderService.updateOrderStatus(orderId, newStatus, reason);
       const nextList = orders.map(o => (o.id === orderId ? updated : o));
       onOrdersChange(nextList);
 
@@ -92,6 +107,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       setStatusError(message);
       setTimeout(() => setStatusError(null), 4000);
     }
+  };
+
+  const handlePaymentConfirmed = (orderId: string) => {
+    const nextOrders = orders.map(order => order.id === orderId ? { ...order, paymentStatus: 'pago' as const } : order);
+    onOrdersChange(nextOrders);
+    setActiveModalOrder(current => current?.id === orderId ? { ...current, paymentStatus: 'pago' } : current);
   };
 
   const handleRefresh = () => {
@@ -155,6 +176,31 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         statusCounts={statusCounts}
       />
 
+      {/* Payment filter */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs" role="group" aria-label="Filtrar por pagamento">
+        {([
+          ['todos', 'Todos pagamentos', null],
+          ['aguardando_pix', 'Aguardando Pix antecipado', paymentCounts.aguardando_pix],
+          ['pendente', 'Pagamento pendente', paymentCounts.pendente],
+          ['pago', 'Pagos', paymentCounts.pago],
+        ] as [PaymentFilter, string, number | null][]).map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSelectedPayment(id)}
+            aria-pressed={selectedPayment === id}
+            className={`shrink-0 px-3 py-1.5 rounded-xl border font-medium transition-colors ${
+              selectedPayment === id
+                ? 'bg-zinc-100 text-zinc-900 border-zinc-100'
+                : 'bg-[#13161D] text-zinc-400 border-zinc-800 hover:text-zinc-200'
+            }`}
+          >
+            {label}
+            {count !== null && <span className={`ml-1.5 font-mono ${id === 'aguardando_pix' && count > 0 && selectedPayment !== id ? 'text-amber-400' : ''}`}>{count}</span>}
+          </button>
+        ))}
+      </div>
+
       {/* List Header */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
@@ -166,12 +212,13 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           </span>
         </div>
 
-        {(selectedStatus !== 'todos' || selectedType !== 'todos' || searchQuery) && (
+        {(selectedStatus !== 'todos' || selectedType !== 'todos' || selectedPayment !== 'todos' || searchQuery) && (
           <button
             type="button"
             onClick={() => {
               setSelectedStatus('todos');
               setSelectedType('todos');
+              setSelectedPayment('todos');
               setSearchQuery('');
             }}
             className="text-xs text-orange-400 hover:text-orange-300 font-medium"
@@ -240,6 +287,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         isOpen={Boolean(activeModalOrder)}
         onClose={() => setActiveModalOrder(null)}
         onUpdateStatus={handleUpdateStatus}
+        onPaymentConfirmed={handlePaymentConfirmed}
       />
     </div>
   );

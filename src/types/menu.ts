@@ -12,6 +12,8 @@ export interface ModifierGroup {
   isRequired: boolean;
   minQuantity: number;
   maxQuantity: number;
+  /** Mirrors product_modifier_groups.is_active. Undefined means active. */
+  isActive?: boolean;
   options: ModifierOption[];
 }
 export type AddonGroup = ModifierGroup;

@@ -7,15 +7,19 @@ import {
   Order,
   PaymentMethod,
   PaymentStatus,
+  PaymentTiming,
   buildOrderItemSnapshot,
 } from '../types';
 import { MenuService } from '../services/menuService';
 import { OrderService } from '../services/orderService';
+import { submitGuestOrder } from '../services/checkoutApi';
+
 import { RestaurantService } from '../services/restaurantService';
 import { createEmptyStoreConfig } from '../services/storeService';
 import { evaluateSchedule } from '../utils/hours';
 import { normalizePhone } from '../utils/phone';
 import { fromCents, sumCents, toCents } from '../utils/money';
+import { reconcileCart } from '../utils/menuRules';
 import { formatCurrency, Modal, Button, playOrderNotificationSound } from '../components/shared';
 import { CartItem } from './types';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -87,6 +91,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
   // Confirmed Order State for Live Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
+
   // Sync cart changes to localStorage
   useEffect(() => {
     try {
@@ -101,16 +106,47 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
   const activeDeliveryAreas = RestaurantService.getActiveDeliveryAreas(storeConfig);
 
   useEffect(() => {
-    const load = async () => {
-      MenuService.setStoreContext(storeConfig.id);
-      OrderService.setStoreContext(storeConfig.id, orders);
-      const cats = await MenuService.getCategories(storeConfig.id);
-      const prods = await MenuService.getItems(storeConfig.id);
-      setCategories(cats);
-      setItems(prods);
-    };
-    load();
+    OrderService.setStoreContext(storeConfig.id, orders);
   }, [storeConfig.id, orders]);
+
+  // Menu comes from the same Supabase tables the Merchant edits. A failure is
+  // shown as an error with retry, never as an empty menu.
+  const [menuStatus, setMenuStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [menuError, setMenuError] = useState<string | null>(null);
+  const [menuNonce, setMenuNonce] = useState(0);
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMenuStatus('loading');
+    setMenuError(null);
+    MenuService.getStorefrontMenu(storeConfig.id)
+      .then(menu => {
+        if (cancelled) return;
+        setCategories(menu.categories);
+        setItems(menu.items);
+        setMenuStatus('ready');
+        // Saved cart lines are re-bound to the current menu: unavailable items
+        // are removed and prices refreshed to what the server will charge.
+        setCartItems(prev => {
+          const { cart, removed } = reconcileCart(prev, menu.items);
+          if (removed.length) {
+            setCartNotice(
+              `${removed.length} ${removed.length === 1 ? 'item foi removido' : 'itens foram removidos'} da sacola porque não ${removed.length === 1 ? 'está' : 'estão'} mais disponíve${removed.length === 1 ? 'l' : 'is'}.`
+            );
+          }
+          return cart;
+        });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setMenuStatus('error');
+        setMenuError(error instanceof Error ? error.message : 'Não foi possível carregar o cardápio.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeConfig.id, menuNonce]);
 
   // Style classes based on visualStyle
   const getStyleClasses = () => {
@@ -252,13 +288,20 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       zipCode?: string;
     };
     paymentMethod: PaymentMethod;
+    paymentTiming: PaymentTiming;
     paymentStatus: PaymentStatus;
     changeFor?: number;
     generalNotes?: string;
     subtotal: number;
     deliveryFee: number;
     total: number;
+    turnstileToken: string;
+    deliveryAreaId?: string;
   }) => {
+    // Re-evaluate the clock at submission, even if checkout was opened earlier.
+    if (!RestaurantService.buildProfile(storeConfig).isOpen) {
+      throw new Error('A loja não está recebendo pedidos agora. Confira o horário e tente novamente mais tarde.');
+    }
     const customerPhone = normalizePhone(orderPayload.customer.phone);
 
     // Immutable snapshots: productId, basePrice and structured modifiers survive
@@ -276,53 +319,80 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       })
     );
 
-    // First order must be derived from this store's own history.
-    const isFirstOrder = !(await OrderService.hasPreviousOrder(customerPhone));
-
-    const newOrder = await OrderService.createOrder({
-      customer: {
-        id: `cust_${Date.now()}`,
-        name: orderPayload.customer.name,
-        phone: customerPhone,
-        isFirstOrder,
-      },
-      items: formattedOrderItems,
-      itemsCount: formattedOrderItems.reduce((acc, i) => acc + i.quantity, 0),
+    // Somente a confirmação do servidor autoriza exibir o pedido como recebido.
+    const receipt = await submitGuestOrder({
+      storeId: storeConfig.id,
+      customer: { name: orderPayload.customer.name, phone: orderPayload.customer.phone, phoneNormalized: customerPhone },
       type: orderPayload.type,
-      subtotal: orderPayload.subtotal,
-      deliveryFee: orderPayload.deliveryFee,
-      discount: 0,
-      total: orderPayload.total,
-      paymentMethod: orderPayload.paymentMethod,
-      paymentStatus: orderPayload.paymentStatus,
-      changeFor: orderPayload.changeFor,
       deliveryAddress: orderPayload.deliveryAddress,
-      generalNotes: orderPayload.generalNotes,
-      estimatedTimeMin:
-        orderPayload.type === 'delivery'
-          ? parseInt(delivery.estimatedDeliveryTime) || 45
-          : parseInt(delivery.estimatedPickupTime) || 20,
+      deliveryAreaId: orderPayload.deliveryAreaId,
+      paymentMethod: orderPayload.paymentMethod,
+      paymentTiming: orderPayload.paymentTiming,
+      changeForCents: orderPayload.changeFor === undefined ? undefined : toCents(orderPayload.changeFor),
+      notes: orderPayload.generalNotes,
+      cartItems,
+      turnstileToken: orderPayload.turnstileToken,
     });
 
-    // Notify parent App and Merchant
-    if (onOrderPlaced) {
-      onOrderPlaced(newOrder);
-    }
-
-    // Play chime
-    playOrderNotificationSound();
-
-    // Clear cart
-    setCartItems([]);
+    // A confirmação do Supabase já é definitiva neste ponto. Falhas na
+    // projeção local ou em notificações nunca devem provocar um segundo POST.
     try {
-      localStorage.removeItem(`biteo_cart_${storeConfig.id}`);
-    } catch {
-      // ignore
+      // First order must be derived from this store's own history.
+      const isFirstOrder = !(await OrderService.hasPreviousOrder(customerPhone));
+  
+      const newOrder = await OrderService.createOrder({
+        customer: {
+          id: `cust_${Date.now()}`,
+          name: orderPayload.customer.name,
+          phone: customerPhone,
+          isFirstOrder,
+        },
+        items: formattedOrderItems,
+        itemsCount: formattedOrderItems.reduce((acc, i) => acc + i.quantity, 0),
+        type: orderPayload.type,
+        subtotal: orderPayload.subtotal,
+        deliveryFee: orderPayload.deliveryFee,
+        discount: 0,
+        total: fromCents(receipt.totalCents),
+        paymentMethod: receipt.paymentMethod ?? orderPayload.paymentMethod,
+        paymentTiming: receipt.paymentTiming ?? orderPayload.paymentTiming,
+        // Never shown as paid on creation: the server always starts 'pendente'.
+        paymentStatus: 'pendente',
+        changeFor: orderPayload.changeFor,
+        deliveryAddress: orderPayload.deliveryAddress,
+        generalNotes: orderPayload.generalNotes,
+        estimatedTimeMin:
+          orderPayload.type === 'delivery'
+            ? parseInt(delivery.estimatedDeliveryTime) || 45
+            : parseInt(delivery.estimatedPickupTime) || 20,
+      }, { orderId: receipt.orderId, orderNumber: receipt.orderNumber });
+  
+      // Notify parent App and Merchant
+      if (onOrderPlaced) {
+        onOrderPlaced(newOrder);
+      }
+  
+      // Play chime
+      playOrderNotificationSound();
+  
+      // Clear cart
+      setCartItems([]);
+      try {
+        localStorage.removeItem(`biteo_cart_${storeConfig.id}`);
+      } catch {
+        // ignore
+      }
+  
+      // Close checkout and show confirmed view
+      setIsCheckoutModalOpen(false);
+      setConfirmedOrder(newOrder);
+    } catch (error) {
+      console.error('Pedido confirmado no servidor; falha na apresentação local', error);
+      setCartItems([]);
+      try { localStorage.removeItem(`biteo_cart_${storeConfig.id}`); } catch { /* storage indisponível */ }
+      setIsCheckoutModalOpen(false);
+      window.alert(`Pedido #${receipt.orderNumber} recebido pela loja. Houve um problema ao exibir a confirmação; NÃO envie novamente. Consulte o estabelecimento.`);
     }
-
-    // Close checkout and show confirmed view
-    setIsCheckoutModalOpen(false);
-    setConfirmedOrder(newOrder);
   };
 
   return (
@@ -400,8 +470,9 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
           return (
             <OrderConfirmedView
               order={liveOrder}
+
               storeConfig={storeConfig}
-              onNewOrder={() => setConfirmedOrder(null)}
+              onNewOrder={() => { setConfirmedOrder(null); }}
               onViewInMerchant={
                 onViewOrderInMerchant
                   ? () => onViewOrderInMerchant(liveOrder)
@@ -648,7 +719,23 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
 
           {/* Products Feed (Responsive Grid: 1 col on mobile, 2 cols on tablet/desktop) */}
           <div className="max-w-4xl mx-auto px-4 mt-4">
-            {filteredItems.length > 0 ? (
+            {cartNotice && (
+              <div role="status" className="mb-3 rounded-2xl border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-200 flex items-start justify-between gap-3">
+                <span>{cartNotice}</span>
+                <button type="button" className="underline shrink-0" onClick={() => setCartNotice(null)}>OK</button>
+              </div>
+            )}
+            {menuStatus === 'loading' ? (
+              <p role="status" className="text-center py-16 text-xs text-zinc-400">Carregando cardápio...</p>
+            ) : menuStatus === 'error' ? (
+              <div role="alert" className="text-center py-12 px-4 rounded-3xl bg-rose-950/20 border border-rose-500/40 space-y-3">
+                <h4 className="text-sm font-bold text-white">Não foi possível carregar o cardápio</h4>
+                <p className="text-xs text-rose-200 max-w-sm mx-auto">{menuError}</p>
+                <Button variant="secondary" size="sm" onClick={() => setMenuNonce(n => n + 1)} className="text-xs">
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : filteredItems.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {filteredItems.map(item => (
                   <div
@@ -693,9 +780,9 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
                       </p>
                       <div className="mt-2.5 flex items-baseline gap-2">
                         <span className="text-sm font-bold text-white font-mono">
-                          {formatCurrency(item.promotionalPrice || item.price)}
+                          {formatCurrency(item.promotionalPrice ?? item.price)}
                         </span>
-                        {item.promotionalPrice && (
+                        {item.promotionalPrice != null && (
                           <span className="text-xs line-through text-zinc-500 font-mono">
                             {formatCurrency(item.price)}
                           </span>
@@ -907,3 +994,4 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
     </div>
   );
 };
+

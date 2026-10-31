@@ -1,3 +1,4 @@
+import { OrderAcceptanceControl } from './OrderAcceptanceControl';
 import React from 'react';
 import { MerchantTab } from './BottomNav';
 import { RestaurantProfile } from '../../types';
@@ -22,6 +23,8 @@ interface SidebarProps {
   newOrdersCount: number;
   restaurant: RestaurantProfile;
   onToggleStatus: () => void;
+  statusDisabled?: boolean;
+  statusSaving?: boolean;
   onToggleSound?: () => void;
   onOpenStorefront?: () => void;
   onOpenStoreSwitcher?: () => void;
@@ -34,6 +37,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   newOrdersCount,
   restaurant,
   onToggleStatus,
+  statusDisabled,
+  statusSaving,
   onToggleSound,
   onOpenStorefront,
   onOpenStoreSwitcher,
@@ -217,19 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {/* Open/Close status button */}
-          <button
-            type="button"
-            onClick={onToggleStatus}
-            className={`w-full py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
-              restaurant.isOpen
-                ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30'
-                : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30'
-            }`}
-          >
-            <Power className="w-3 h-3" />
-            <span>{restaurant.isOpen ? 'Estabelecimento Aberto' : 'Fechado no Momento'}</span>
-          </button>
+          <span role="status" className="text-xs text-zinc-400">{restaurant.isOpen ? 'Loja aberta' : 'Loja fechada'}</span>
         </div>
 
         {/* Storefront direct button */}

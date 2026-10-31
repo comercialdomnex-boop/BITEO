@@ -1,3 +1,6 @@
+import { StoreService } from './storeService';
+import { persistOrderStatus } from './merchantOrderPersistence';
+import { RestaurantService } from './restaurantService';
 import {
   Order,
   OrderFilterOptions,
@@ -9,6 +12,7 @@ import {
 } from '../types';
 import { phoneIdentity } from '../utils/phone';
 import { fromCents, sumCents } from '../utils/money';
+import { canStartPreparation } from '../utils/paymentRules';
 
 function highestOrderNumber(orders: Order[]): number {
   return orders.reduce((max, order) => {
@@ -191,14 +195,19 @@ export class OrderService {
   static async createOrder(
     orderData: Omit<Order, 'id' | 'displayId' | 'createdAt' | 'statusHistory' | 'status'> & {
       status?: OrderStatus;
-    }
+    },
+    serverReceipt?: { orderId: string; orderNumber: number }
   ): Promise<Order> {
     const storeId = this.activeStoreId;
-    const orderNumber = (this.storeCounters.get(storeId) ?? 0) + 1;
+    const config = await StoreService.getStoreConfig(storeId);
+    if (!RestaurantService.buildProfile(config).isOpen) {
+      throw new Error('A loja não está recebendo pedidos agora.');
+    }
+    const orderNumber = serverReceipt?.orderNumber ?? (this.storeCounters.get(storeId) ?? 0) + 1;
     this.storeCounters.set(storeId, orderNumber);
 
     const displayId = `#${orderNumber}`;
-    const id = `ord_${storeId}_${orderNumber}_${Date.now()}`;
+    const id = serverReceipt?.orderId ?? `ord_${storeId}_${orderNumber}_${Date.now()}`;
     const now = new Date().toISOString();
 
     const status: OrderStatus = orderData.status || 'novo';
@@ -247,6 +256,14 @@ export class OrderService {
       );
     }
 
+    // Same rule as the backend: Pix antecipado only enters preparation once paid.
+    if (newStatus === 'em_preparo' && !canStartPreparation(order)) {
+      throw new Error(
+        `Pedido ${order.displayId} aguarda a confirmação do Pix antecipado. Confirme o pagamento antes de iniciar o preparo.`
+      );
+    }
+
+    await persistOrderStatus(order.id, newStatus, reason);
     const now = new Date().toISOString();
 
     const getHistoryLabel = (st: OrderStatus): string => {

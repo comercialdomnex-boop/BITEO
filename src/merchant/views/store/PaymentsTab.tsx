@@ -25,7 +25,7 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
       <div className="p-3.5 rounded-2xl bg-[#0F1117] border border-zinc-850 text-xs text-zinc-400 flex items-start gap-2.5">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          Configure as modalidades de pagamento aceitas pelo seu estabelecimento. Os pagamentos são combinados diretamente com o cliente (PIX instantâneo ou maquininha sem fio na entrega).
+          Escolha como e quando seus clientes podem pagar. Todo pedido começa com pagamento pendente: você confirma no painel do pedido quando receber. Pedidos com Pix antecipado só podem entrar em preparo depois da confirmação.
         </p>
       </div>
 
@@ -35,23 +35,73 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
         </h3>
 
         <div className="space-y-3">
-          {/* PIX */}
+          {/* PIX antecipado */}
           <div className="p-4 rounded-2xl bg-[#13161D] border border-zinc-800 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-400 flex items-center justify-center shrink-0">
                   <QrCode className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">PIX Instantâneo</h4>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-white">Pix antecipado</h4>
+                    <span className="text-[10px] px-2 py-0.2 rounded-md bg-teal-500/10 text-teal-300 border border-teal-500/30">
+                      Paga antes do preparo
+                    </span>
+                  </div>
                   <p className="text-xs text-zinc-400">
-                    Chave PIX e QR Code dinâmico para pagamento online ou na entrega
+                    O cliente paga ao fazer o pedido. O preparo só é liberado depois que você confirmar o recebimento.
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
+                aria-label="Aceitar Pix antecipado"
+                onClick={() => handleChange('acceptPixPrepaid', !payments.acceptPixPrepaid)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                  payments.acceptPixPrepaid ? 'bg-emerald-500' : 'bg-zinc-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    payments.acceptPixPrepaid ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {payments.acceptPixPrepaid && !payments.pixKey?.trim() && (
+              <div className="flex items-start gap-2 text-[11px] text-amber-300">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>Cadastre sua chave Pix abaixo. Sem ela, o Pix antecipado não aparece para o cliente.</span>
+              </div>
+            )}
+          </div>
+
+          {/* PIX na entrega/retirada */}
+          <div className="p-4 rounded-2xl bg-[#13161D] border border-zinc-800 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-400 flex items-center justify-center shrink-0">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-white">Pix na entrega/retirada</h4>
+                    <span className="text-[10px] px-2 py-0.2 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      Paga ao receber
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    O cliente paga com Pix quando recebe ou retira o pedido. Não bloqueia o preparo.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Aceitar Pix na entrega ou retirada"
                 onClick={() => handleChange('acceptPix', !payments.acceptPix)}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   payments.acceptPix ? 'bg-emerald-500' : 'bg-zinc-700'
@@ -65,10 +115,10 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
               </button>
             </div>
 
-            {payments.acceptPix && (
+            {(payments.acceptPix || payments.acceptPixPrepaid) && (
               <div className="pt-2 border-t border-zinc-850">
                 <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  Chave PIX Cadastrada (CPF, CNPJ, Celular ou E-mail)
+                  Chave PIX da loja (CPF, CNPJ, Celular ou E-mail), usada nas duas opções de Pix
                 </label>
                 <input
                   type="text"
@@ -89,9 +139,9 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
                   <Banknote className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Dinheiro em Espécie</h4>
+                  <h4 className="text-sm font-bold text-white">Dinheiro na entrega/retirada</h4>
                   <p className="text-xs text-zinc-400">
-                    Pagamento realizado diretamente no ato da entrega ou retirada
+                    Pago ao receber ou retirar o pedido. Você confirma o recebimento no painel.
                   </p>
                 </div>
               </div>
@@ -149,9 +199,9 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-white">Cartão de Crédito</h4>
+                    <h4 className="text-sm font-bold text-white">Cartão de crédito</h4>
                     <span className="text-[10px] px-2 py-0.2 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      Na entrega (maquininha)
+                      Na entrega/retirada (maquininha)
                     </span>
                   </div>
                   <p className="text-xs text-zinc-400">
@@ -187,9 +237,9 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-white">Cartão de Débito</h4>
+                    <h4 className="text-sm font-bold text-white">Cartão de débito</h4>
                     <span className="text-[10px] px-2 py-0.2 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      Na entrega (maquininha)
+                      Na entrega/retirada (maquininha)
                     </span>
                   </div>
                   <p className="text-xs text-zinc-400">

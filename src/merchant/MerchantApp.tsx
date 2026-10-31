@@ -1,3 +1,5 @@
+import './merchantTheme.css';
+import { saveStorePublication } from '../services/storePublicationPersistence';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   RestaurantProfile,
@@ -9,6 +11,8 @@ import {
   CurrentUser,
   UserRole,
 } from '../types';
+import { saveOrderAcceptance } from '../services/orderAcceptancePersistence';
+import { OrderAcceptanceControl } from './components/OrderAcceptanceControl';
 import { Header } from '../components/shared/Header';
 import { Sidebar } from './components/Sidebar';
 import { BottomNav, MerchantTab } from './components/BottomNav';
@@ -68,6 +72,14 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
   const [activeModalOrder, setActiveModalOrder] = useState<Order | null>(null);
   const [isStoreSwitcherOpen, setIsStoreSwitcherOpen] = useState(false);
 
+  const [acceptanceSaving, setAcceptanceSaving] = useState(false);
+  const [acceptanceError, setAcceptanceError] = useState<string | null>(null);
+  const acceptanceInFlight = useRef(false);
+  const latestConfig = useRef(storeConfig);
+  latestConfig.current = storeConfig;
+
+  useEffect(() => { setAcceptanceError(null); }, [storeConfig.id]);
+
   const activeStoreId = currentStoreId || storeConfig.id;
 
   // Only management roles may edit store settings. ATENDANT is read-only; when
@@ -95,13 +107,24 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
     }
   }, [initialSelectedOrderId, orders, onClearInitialOrderId]);
 
-  // Sync menu items for MyStore preview
+  // Sync menu items for MyStore preview, with the same visibility rules as the storefront.
+  const [menuItemsError, setMenuItemsError] = useState<string | null>(null);
   useEffect(() => {
-    const loadItems = async () => {
-      const prods = await MenuService.getItems(activeStoreId);
-      setMenuItems(prods);
+    let cancelled = false;
+    MenuService.getStorefrontMenu(activeStoreId)
+      .then(menu => {
+        if (cancelled) return;
+        setMenuItems(menu.items);
+        setMenuItemsError(null);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMenuItemsError(error instanceof Error ? error.message : 'Não foi possível carregar o cardápio.');
+        }
+      });
+    return () => {
+      cancelled = true;
     };
-    loadItems();
   }, [activeStoreId, activeTab]);
 
   // Track incoming orders from Storefront to trigger visual banner and sound alert
@@ -126,14 +149,35 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
 
   const newOrdersCount = orders.filter(o => o.status === 'novo').length;
 
-  const handleToggleStatus = () => {
-    onUpdateStoreConfig({
-      ...storeConfig,
-      operations: {
-        ...storeConfig.operations,
-        acceptingOrders: !storeConfig.operations.acceptingOrders,
-      },
-    });
+  const handleToggleStatus = async () => {
+    if (!canEditStore || currentRole === null || acceptanceInFlight.current) return;
+    acceptanceInFlight.current = true;
+    const storeId = storeConfig.id;
+    const opening = !storeConfig.operations.acceptingOrders || !storeConfig.online.isPublished;
+    setAcceptanceSaving(true);
+    setAcceptanceError(null);
+    try {
+      // Opening publishes the storefront first, then enables checkout.
+      // Closing only pauses orders; the menu remains available to browse.
+      if (opening && !storeConfig.online.isPublished) {
+        await saveStorePublication(storeId, true);
+      }
+      const acceptingOrders = await saveOrderAcceptance(storeId, opening);
+      if (latestConfig.current.id !== storeId) return;
+      const current = latestConfig.current;
+      onUpdateStoreConfig({
+        ...current,
+        online: { ...current.online, isPublished: opening ? true : current.online.isPublished },
+        operations: { ...current.operations, acceptingOrders },
+      });
+    } catch (error) {
+      if (latestConfig.current.id === storeId) {
+        setAcceptanceError(error instanceof Error ? error.message : 'Não foi possível alterar o estado da loja.');
+      }
+    } finally {
+      acceptanceInFlight.current = false;
+      setAcceptanceSaving(false);
+    }
   };
 
   const handleToggleSound = () => {
@@ -198,7 +242,8 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0D10] text-zinc-100 flex flex-col md:flex-row">
+    <div className="merchant-theme min-h-screen bg-[#0B0D10] text-zinc-100 flex flex-col md:flex-row">
+      {acceptanceError && <div role="alert" className="fixed bottom-20 left-4 right-4 z-50 rounded-xl bg-rose-950 p-3 text-sm text-rose-100">{acceptanceError}</div>}
       {/* Real-time Order Arrival Banner */}
       {incomingOrderNotification && (
         <div className="fixed top-14 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 p-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-2xl shadow-2xl border border-orange-400 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-4">
@@ -231,6 +276,8 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
           newOrdersCount={newOrdersCount}
           restaurant={restaurant}
           onToggleStatus={handleToggleStatus}
+          statusDisabled={!canEditStore || currentRole === null}
+          statusSaving={acceptanceSaving}
           onToggleSound={handleToggleSound}
           onOpenStorefront={onOpenStorefront}
           onOpenStoreSwitcher={() => setIsStoreSwitcherOpen(true)}
@@ -245,6 +292,8 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
           <Header
             restaurant={restaurant}
             onToggleStatus={handleToggleStatus}
+            statusDisabled={!canEditStore || currentRole === null}
+            statusSaving={acceptanceSaving}
             onToggleSound={handleToggleSound}
             onOpenStorefront={onOpenStorefront}
             onOpenStoreSwitcher={() => setIsStoreSwitcherOpen(true)}
@@ -284,19 +333,8 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
                 )}
               </button>
 
-              {/* Status toggle */}
-              <button
-                type="button"
-                onClick={handleToggleStatus}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                  restaurant.isOpen
-                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                }`}
-              >
-                <Power className="w-3.5 h-3.5" />
-                <span>{restaurant.isOpen ? 'Aberto' : 'Fechado'}</span>
-              </button>
+              <OrderAcceptanceControl restaurant={restaurant} onToggle={handleToggleStatus}
+                disabled={!canEditStore || currentRole === null} saving={acceptanceSaving} />
 
               {/* Storefront direct link */}
               {onOpenStorefront && (
@@ -330,6 +368,7 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
             <MyStoreView
               config={storeConfig}
               items={menuItems}
+              itemsError={menuItemsError}
               onUpdateConfig={onUpdateStoreConfig}
               onOpenStorefront={onOpenStorefront}
               canEdit={canEditStore}
@@ -366,6 +405,12 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
           isOpen={Boolean(activeModalOrder)}
           onClose={() => setActiveModalOrder(null)}
           onUpdateStatus={handleUpdateModalOrderStatus}
+          onPaymentConfirmed={orderId => {
+            onOrdersChange(orders.map(o => (o.id === orderId ? { ...o, paymentStatus: 'pago' as const } : o)));
+            setActiveModalOrder(current =>
+              current?.id === orderId ? { ...current, paymentStatus: 'pago' } : current
+            );
+          }}
         />
       )}
 

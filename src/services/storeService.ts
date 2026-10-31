@@ -82,6 +82,7 @@ export function createEmptyStoreConfig(id = ''): StoreConfig {
       areas: [],
     },
     payments: {
+      acceptPixPrepaid: false,
       acceptPix: false,
       acceptCash: false,
       cashNeedChange: false,

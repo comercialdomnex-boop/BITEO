@@ -3,6 +3,7 @@ import { MenuItem, ModifierGroup, OrderItemModifier } from '../../types';
 import { CartItem } from '../types';
 import { formatCurrency, Modal } from '../../components/shared';
 import { fromCents, sumCents, toCents } from '../../utils/money';
+import { effectiveUnitPriceCents, requiredSelectionCount } from '../../utils/menuRules';
 import { Plus, Minus, Check, AlertCircle, Sparkles, Utensils } from 'lucide-react';
 
 interface ProductDetailModalProps {
@@ -71,7 +72,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
       if (isSingleSelect) {
         // If clicking already selected in single-select and not required, toggle off, otherwise set it
-        if (current.includes(optionId) && !group.isRequired) {
+        if (current.includes(optionId) && requiredSelectionCount(group) === 0) {
           return { ...prev, [group.id]: [] };
         }
         return { ...prev, [group.id]: [optionId] };
@@ -89,7 +90,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // Check validation for required groups
   const validationErrors = (item.modifierGroups || []).filter(group => {
     const selected = selectedModifiers[group.id] || [];
-    if (group.isRequired && selected.length < group.minQuantity) {
+    // Same rule as create_guest_order: greatest(min_select, is_required ? 1 : 0).
+    if (selected.length < requiredSelectionCount(group)) {
       return true;
     }
     return false;
@@ -98,7 +100,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const isValid = validationErrors.length === 0;
 
   // Calculate Unit and Total Price
-  const basePrice = item.promotionalPrice || item.price;
+  // Same as the server: coalesce(promotional_price_cents, price_cents).
+  const basePrice = fromCents(effectiveUnitPriceCents(item));
   const modifierSelections: OrderItemModifier[] = [];
 
   if (item.modifierGroups) {
@@ -251,7 +254,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
           )}
 
-          {item.promotionalPrice && (
+          {item.promotionalPrice != null && (
             <div
               className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold text-white shadow-lg flex items-center gap-1"
               style={{ backgroundColor: primaryColor }}
@@ -265,7 +268,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="text-lg font-bold text-white">{item.name}</h3>
               <div className="text-right shrink-0">
-                {item.promotionalPrice ? (
+                {item.promotionalPrice != null ? (
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-xs text-zinc-500 line-through">
                       {formatCurrency(item.price)}
@@ -300,14 +303,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="space-y-4">
             {item.modifierGroups.map(group => {
               const currentSelected = selectedModifiers[group.id] || [];
-              const isGroupFilled =
-                !group.isRequired || currentSelected.length >= group.minQuantity;
+              const minRequired = requiredSelectionCount(group);
+              const isGroupFilled = currentSelected.length >= minRequired;
 
               return (
                 <div
                   key={group.id}
                   className={`p-3.5 ${styles.card} transition-colors ${
-                    !isGroupFilled && group.isRequired
+                    !isGroupFilled
                       ? 'border-amber-500/40 bg-amber-950/10'
                       : ''
                   }`}
@@ -319,7 +322,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                           {group.name}
                         </h4>
-                        {group.isRequired ? (
+                        {minRequired > 0 ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                             Obrigatório
                           </span>
@@ -330,10 +333,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         )}
                       </div>
                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                        {group.isRequired
-                          ? group.minQuantity === group.maxQuantity
-                            ? `Selecione exatamente ${group.minQuantity} opção`
-                            : `Selecione de ${group.minQuantity} a ${group.maxQuantity} opções`
+                        {minRequired > 0
+                          ? minRequired === group.maxQuantity
+                            ? `Selecione exatamente ${minRequired} ${minRequired === 1 ? 'opção' : 'opções'}`
+                            : `Selecione de ${minRequired} a ${group.maxQuantity} opções`
                           : `Escolha até ${group.maxQuantity} ${
                               group.maxQuantity === 1 ? 'opção' : 'opções'
                             }`}
@@ -348,7 +351,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         </span>
                       ) : (
                         <span className="text-[11px] font-medium text-amber-400">
-                          {group.minQuantity - currentSelected.length} restante(s)
+                          {minRequired - currentSelected.length} restante(s)
                         </span>
                       )}
                     </div>

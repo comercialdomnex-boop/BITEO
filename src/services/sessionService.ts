@@ -14,6 +14,7 @@ import {
   fetchDeliveryAreas,
 } from './storePersistence';
 import { OrderService } from './orderService';
+import { fetchMerchantOrders } from './merchantOrderPersistence';
 import { MenuService } from './menuService';
 import { StoreService } from './storeService';
 
@@ -107,9 +108,11 @@ export class SessionService {
           } catch (e) {
             // Ignore on fetch failure
           }
+          const orders = await fetchMerchantOrders(store.id);
           return {
             ...store,
             config,
+            orders,
           };
         })
       );

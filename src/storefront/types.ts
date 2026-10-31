@@ -1,4 +1,4 @@
-import { PaymentMethod, CartItem, Cart } from '../types';
+import { PaymentMethod, PaymentTiming, CartItem, Cart } from '../types';
 
 export type { CartItem, Cart };
 
@@ -21,6 +21,7 @@ export interface AddressFormData {
 
 export interface PaymentFormData {
   method: PaymentMethod;
+  timing: PaymentTiming;
   needChange: boolean;
   changeFor: string; // string input to avoid float quirks in inputs
 }

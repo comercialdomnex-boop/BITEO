@@ -1,3 +1,4 @@
+import { saveStorePublication } from '../../services/storePublicationPersistence';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   StoreConfig,
@@ -25,6 +26,7 @@ import { HoursTab } from './store/HoursTab';
 import { DeliveryTab } from './store/DeliveryTab';
 import { PaymentsTab } from './store/PaymentsTab';
 import { OnlineStoreTab } from './store/OnlineStoreTab';
+import { WhatsAppTab } from './store/WhatsAppTab';
 import { StorePreviewPhone } from './store/StorePreviewPhone';
 import { Modal, Button } from '../../components/shared';
 import {
@@ -40,6 +42,7 @@ import {
   AlertCircle,
   Loader2,
   Share2,
+  MessageCircle,
 } from 'lucide-react';
 
 export type StoreTab =
@@ -48,11 +51,14 @@ export type StoreTab =
   | 'horarios'
   | 'entrega'
   | 'pagamentos'
+  | 'whatsapp'
   | 'online';
 
 interface MyStoreViewProps {
   config: StoreConfig;
   items: MenuItem[];
+  /** Real load error for the preview; never rendered as an empty menu. */
+  itemsError?: string | null;
   onUpdateConfig: (config: StoreConfig) => void;
   onOpenStorefront?: () => void;
   /** Only management roles may change store settings. Defaults to editable. */
@@ -62,6 +68,7 @@ interface MyStoreViewProps {
 export const MyStoreView: React.FC<MyStoreViewProps> = ({
   config,
   items,
+  itemsError,
   onUpdateConfig,
   onOpenStorefront,
   canEdit = true,
@@ -271,11 +278,29 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
     }
   };
 
+  const [publicationSaving, setPublicationSaving] = useState(false);
   const handleUpdateOnline = async (
     onlineUpdates: Partial<StoreOnlineSettings>
   ) => {
-    const updated = await StoreService.updateOnline(config.id, onlineUpdates);
-    onUpdateConfig(updated);
+    if (publicationSaving) return;
+    if (onlineUpdates.isPublished === undefined) {
+      const updated = await StoreService.updateOnline(config.id, onlineUpdates);
+      onUpdateConfig(updated);
+      return;
+    }
+    setPublicationSaving(true);
+    setSaveError(null);
+    try {
+      const published = await saveStorePublication(config.id, onlineUpdates.isPublished);
+      const updated = await StoreService.updateOnline(config.id, { isPublished: published });
+      onUpdateConfig(updated);
+      setSaveState('saved');
+    } catch (error) {
+      setSaveState('error');
+      setSaveError(toFriendlyStoreUpdateError(error));
+    } finally {
+      setPublicationSaving(false);
+    }
   };
 
   const tabs: {
@@ -288,6 +313,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
     { id: 'horarios', label: 'Horários', icon: Clock },
     { id: 'entrega', label: 'Entrega & Retirada', icon: Bike },
     { id: 'pagamentos', label: 'Pagamentos', icon: CreditCard },
+    { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
     { id: 'online', label: 'Loja Online', icon: Globe },
   ];
 
@@ -460,10 +486,15 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
             />
           )}
 
+          {activeTab === 'whatsapp' && (
+            <WhatsAppTab storeName={config.info.name} />
+          )}
+
           {activeTab === 'online' && (
             <OnlineStoreTab
               config={config}
               onUpdateOnline={handleUpdateOnline}
+              publicationSaving={publicationSaving}
               onOpenStorefront={onOpenStorefront}
               onSaveNotice={showToast}
             />
@@ -485,6 +516,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
             <StorePreviewPhone
               config={config}
               items={items}
+              itemsError={itemsError}
               onOpenStorefront={onOpenStorefront}
             />
           </div>
@@ -539,6 +571,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
           <StorePreviewPhone
             config={config}
             items={items}
+            itemsError={itemsError}
             onOpenStorefront={onOpenStorefront}
           />
         </div>

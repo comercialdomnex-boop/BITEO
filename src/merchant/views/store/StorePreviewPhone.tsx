@@ -13,12 +13,14 @@ import {
 interface StorePreviewPhoneProps {
   config: StoreConfig;
   items: MenuItem[];
+  itemsError?: string | null;
   onOpenStorefront?: () => void;
 }
 
 export const StorePreviewPhone: React.FC<StorePreviewPhoneProps> = ({
   config,
   items,
+  itemsError,
   onOpenStorefront,
 }) => {
   const { theme, info, hours, delivery } = config;
@@ -170,7 +172,11 @@ export const StorePreviewPhone: React.FC<StorePreviewPhoneProps> = ({
 
           {/* Real products only: no sample cards */}
           <div className="px-3 mt-2.5 space-y-2">
-            {availableItems.length > 0 ? (
+            {itemsError ? (
+              <p role="alert" className="text-[10px] text-rose-300 p-2 rounded-lg border border-rose-500/30 bg-rose-950/30">
+                Não foi possível carregar o cardápio: {itemsError}
+              </p>
+            ) : availableItems.length > 0 ? (
               availableItems.map(item => (
               <div
                 key={item.id}
