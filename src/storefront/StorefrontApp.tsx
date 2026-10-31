@@ -44,6 +44,7 @@ interface StorefrontAppProps {
   config?: StoreConfig;
   orders?: Order[];
   onBackToMerchant: () => void;
+  publicMode?: boolean;
   onOrderPlaced?: (order: Order) => void;
   onViewOrderInMerchant?: (order: Order) => void;
 }
@@ -53,6 +54,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
   config: propConfig,
   orders,
   onBackToMerchant,
+  publicMode = false,
   onOrderPlaced,
   onViewOrderInMerchant,
 }) => {
@@ -405,8 +407,8 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         </div>
       )}
 
-      {/* Top Banner Notice: Back to merchant panel */}
-      <div className="bg-[#12151D] border-b border-zinc-800 px-4 py-2 text-xs text-zinc-300 flex items-center justify-between gap-2">
+      {/* Only merchant preview shows admin navigation. */}
+      {!publicMode && <div className="bg-[#12151D] border-b border-zinc-800 px-4 py-2 text-xs text-zinc-300 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 truncate">
           <span
             className="w-2 h-2 rounded-full"
@@ -423,18 +425,18 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         >
           Voltar ao Painel BITEO
         </button>
-      </div>
+      </div>}
 
       {/* Header Bar */}
       <header className="sticky top-0 z-30 bg-[#0A0C0F]/95 backdrop-blur-md border-b border-zinc-850 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <button
+          {!publicMode ? <button
             onClick={onBackToMerchant}
             className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Voltar ao Painel</span>
-          </button>
+          </button> : <span className="text-xs font-extrabold text-orange-500">BITEO</span>}
 
           <span className="text-xs font-bold tracking-tight text-white uppercase truncate">
             {info.name}
@@ -825,7 +827,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
                     Este estabelecimento está cadastrando seus produtos e preparando novidades. Volte em instantes para fazer seu pedido!
                   </p>
                 </div>
-                {onBackToMerchant && (
+                {!publicMode && onBackToMerchant && (
                   <div className="pt-1">
                     <Button
                       variant="secondary"
