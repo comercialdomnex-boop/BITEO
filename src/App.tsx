@@ -9,6 +9,9 @@ import {
 import { createEmptyStoreConfig, StoreService } from './services/storeService';
 import { MerchantApp } from './merchant/MerchantApp';
 import { StorefrontApp } from './storefront/StorefrontApp';
+import { PublicStorefront } from './storefront/PublicStorefront';
+import { PublicOrderTracking } from './storefront/PublicOrderTracking';
+import { PlatformAdmin } from './admin/PlatformAdmin';
 import { LoginView } from './auth/LoginView';
 import { RegisterView } from './auth/RegisterView';
 import { ResetPasswordView } from './auth/ResetPasswordView';
@@ -26,6 +29,11 @@ export type AppRoute =
   | 'storefront';
 
 export default function App() {
+  const publicSlug = (() => {
+    const path = decodeURIComponent(window.location.pathname).replace(/^\/+|\/+$/g, '');
+    const reserved = new Set(['login', 'cadastro', 'recuperar', 'recuperacao', 'merchant', 'onboarding', 'admin']);
+    return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path) && !reserved.has(path) ? path : null;
+  })();
   const { status, currentUser, isRecovery, signOut, profileError, clearRecovery } =
     useAuth();
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('login');
@@ -298,6 +306,7 @@ export default function App() {
   return (
     <OnboardingWizard
             onComplete={handleOnboardingComplete}
+            additionalStore={availableStores.length > 0}
             onCancel={
               currentUser && availableStores.length > 0
                 ? () => setCurrentRoute('merchant')
@@ -360,7 +369,9 @@ default:
         </div>
       )}
       <main className="flex-1 w-full">
-        {renderCurrentView(false)}
+        {window.location.pathname === '/admin' ? <PlatformAdmin /> : publicSlug ? (/^#\/pedido\/[0-9a-f]{64}$/.test(window.location.hash)
+          ? <PublicOrderTracking slug={publicSlug} token={window.location.hash.slice('#/pedido/'.length)} />
+          : <PublicStorefront slug={publicSlug} />) : renderCurrentView(false)}
       </main>
     </div>
   );

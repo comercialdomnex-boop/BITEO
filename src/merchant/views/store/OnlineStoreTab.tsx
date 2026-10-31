@@ -40,7 +40,7 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
   const [tempSlug, setTempSlug] = useState(online.slug);
   const [isEditingSlug, setIsEditingSlug] = useState(false);
 
-  const fullStoreUrl = `https://biteo.com.br/${online.slug}`;
+  const fullStoreUrl = `https://biteo.domnextech.com.br/${online.slug}`;
 
   // Validate slug rules: only lowercase letters, numbers, and hyphens, 3 to 40 chars
   const validateSlug = (val: string) => {
@@ -63,7 +63,7 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
     if (!validation.isValid) return;
     onUpdateOnline({ slug: tempSlug });
     setIsEditingSlug(false);
-    onSaveNotice(`Novo endereço salvo: biteo.com.br/${tempSlug}`);
+    onSaveNotice(`Novo endereço salvo: biteo.domnextech.com.br/${tempSlug}`);
   };
 
   const handleCopyLink = () => {
@@ -141,20 +141,17 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
           {!isEditingSlug ? (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#0A0C0F] border border-zinc-800">
               <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-300 truncate">
-                <span className="text-zinc-500">https://biteo.com.br/</span>
+                <span className="text-zinc-500">https://biteo.domnextech.com.br/</span>
                 <strong className="text-orange-400">{online.slug}</strong>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => {
-                    setTempSlug(online.slug);
-                    setIsEditingSlug(true);
-                  }}
+                  onClick={() => onSaveNotice('O endereço é definido no cadastro da loja. Para alterá-lo, é necessária uma atualização segura no Supabase.')}
                   className="px-2.5 py-1 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
                 >
-                  Alterar Link
+                  Link da loja
                 </button>
 
                 <button
@@ -170,7 +167,7 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
           ) : (
             <div className="space-y-3 p-3.5 rounded-xl bg-[#0A0C0F] border border-orange-500/40 animate-in fade-in">
               <div className="flex items-center gap-1.5 bg-[#141720] border border-zinc-700 rounded-xl px-3 py-2 text-xs font-mono">
-                <span className="text-zinc-500">biteo.com.br/</span>
+                <span className="text-zinc-500">biteo.domnextech.com.br/</span>
                 <input
                   type="text"
                   value={tempSlug}

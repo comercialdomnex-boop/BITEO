@@ -80,14 +80,15 @@ function optional(value: string | null | undefined): string | null {
  * on failure so the caller can map it to a friendly pt-BR message.
  */
 export async function createFirstStore(
-  input: CreateFirstStoreInput
+  input: CreateFirstStoreInput,
+  additional = false
 ): Promise<CreatedStoreRow> {
   const supabase = getSupabase();
   if (!supabase) {
     throw new Error(supabaseConfigError ?? 'Supabase não está configurado.');
   }
 
-  const { data, error } = await supabase.rpc('create_first_store', {
+  const { data, error } = await supabase.rpc(additional ? 'create_additional_store' : 'create_first_store', {
     p_name: input.name.trim(),
     p_slug: input.slug.trim().toLowerCase(),
     p_category: input.category.trim(),

@@ -28,6 +28,7 @@ export type PixCheckoutResult =
   | { status: 'unavailable' };
 
 export interface CreatedOrderResponse {
+  trackingToken?: string | null;
   pix?: PixCheckoutResult;
   orderId: string;
   orderNumber: number;

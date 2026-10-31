@@ -182,12 +182,17 @@ test('checkout sends payment method and timing, never a payment status', async (
 // Contract checks on the migration: the SQL suite (tests/rls) exercises it
 // against Postgres; these guard the rules from being dropped by accident.
 test('payment migration keeps the backend rules', () => {
-  const sql = readFileSync('supabase/migrations/20261031120000_payment_timing_rules.sql', 'utf8');
+  // Constraints are intentionally applied in the follow-up finalize migration,
+  // after the payment_timing backfill. Validate the combined migration contract.
+  const sql = [
+    'supabase/migrations/20261031120000_payment_timing_rules.sql',
+    'supabase/migrations/20261031150000_payment_timing_finalize.sql',
+  ].map(path => readFileSync(path, 'utf8')).join('\n');
   assert.match(sql, /revoke update \(payment_status\) on public\.orders from authenticated/);
   assert.match(sql, /p_target_status = 'em_preparo'\s+and v_order\.payment_timing = 'antecipado'\s+and v_order\.payment_status <> 'pago'/);
-  assert.match(sql, /orders_prepaid_requires_pix check/);
-  assert.match(sql, /orders_payment_timing_matches_fulfillment check/);
-  assert.match(sql, /orders_paid_has_confirmation check/);
+  assert.match(sql, /add constraint orders_prepaid_requires_pix check/);
+  assert.match(sql, /add constraint orders_payment_timing_matches_fulfillment check/);
+  assert.match(sql, /add constraint orders_paid_has_confirmation check/);
   assert.match(sql, /v_type,'novo',v_payment,v_timing,'pendente'/);
   assert.match(sql, /payment_method='pix' and payment_timing='antecipado'/);
   assert.doesNotMatch(sql, /grant update \([^)]*payment_status/);

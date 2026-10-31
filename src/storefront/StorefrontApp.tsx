@@ -44,6 +44,7 @@ interface StorefrontAppProps {
   config?: StoreConfig;
   orders?: Order[];
   onBackToMerchant: () => void;
+  publicMode?: boolean;
   onOrderPlaced?: (order: Order) => void;
   onViewOrderInMerchant?: (order: Order) => void;
 }
@@ -53,6 +54,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
   config: propConfig,
   orders,
   onBackToMerchant,
+  publicMode = false,
   onOrderPlaced,
   onViewOrderInMerchant,
 }) => {
@@ -90,6 +92,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
 
   // Confirmed Order State for Live Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
 
 
   // Sync cart changes to localStorage
@@ -334,6 +337,12 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       turnstileToken: orderPayload.turnstileToken,
     });
 
+    if (publicMode && receipt.trackingToken && /^[0-9a-f]{64}$/.test(receipt.trackingToken)) {
+      const url = `${window.location.origin}/${storeConfig.online.slug}#/pedido/${receipt.trackingToken}`;
+      setTrackingUrl(url);
+      try { localStorage.setItem(`biteo_last_tracking_${storeConfig.id}`, url); } catch { /* storage disabled */ }
+    }
+
     // A confirmação do Supabase já é definitiva neste ponto. Falhas na
     // projeção local ou em notificações nunca devem provocar um segundo POST.
     try {
@@ -405,8 +414,8 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         </div>
       )}
 
-      {/* Top Banner Notice: Back to merchant panel */}
-      <div className="bg-[#12151D] border-b border-zinc-800 px-4 py-2 text-xs text-zinc-300 flex items-center justify-between gap-2">
+      {/* Only merchant preview shows admin navigation. */}
+      {!publicMode && <div className="bg-[#12151D] border-b border-zinc-800 px-4 py-2 text-xs text-zinc-300 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 truncate">
           <span
             className="w-2 h-2 rounded-full"
@@ -423,18 +432,18 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         >
           Voltar ao Painel BITEO
         </button>
-      </div>
+      </div>}
 
       {/* Header Bar */}
       <header className="sticky top-0 z-30 bg-[#0A0C0F]/95 backdrop-blur-md border-b border-zinc-850 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <button
+          {!publicMode ? <button
             onClick={onBackToMerchant}
             className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Voltar ao Painel</span>
-          </button>
+          </button> : <span className="text-xs font-extrabold text-orange-500">BITEO</span>}
 
           <span className="text-xs font-bold tracking-tight text-white uppercase truncate">
             {info.name}
@@ -459,6 +468,11 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         </div>
       </header>
 
+      {publicMode && !confirmedOrder && (() => {
+        let lastUrl: string | null = null;
+        try { lastUrl = localStorage.getItem(`biteo_last_tracking_${storeConfig.id}`); } catch { /* unavailable */ }
+        return lastUrl ? <div className="mx-auto max-w-4xl px-4 pt-3"><a className="text-sm text-orange-400 underline" href={lastUrl}>Acompanhar meu último pedido</a></div> : null;
+      })()}
       {/* If an order was just confirmed, render the tracking screen */}
       {confirmedOrder ? (
         (() => {
@@ -468,6 +482,8 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
               : confirmedOrder;
 
           return (
+            <div>
+            {publicMode && trackingUrl && <div className="mx-auto max-w-4xl px-4 py-4"><a className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white inline-block" href={trackingUrl}>Acompanhar pedido e salvar link</a></div>}
             <OrderConfirmedView
               order={liveOrder}
 
@@ -481,6 +497,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
               primaryColor={theme.primaryColor}
               visualStyle={theme.visualStyle}
             />
+            </div>
           );
         })()
       ) : (
@@ -825,7 +842,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
                     Este estabelecimento está cadastrando seus produtos e preparando novidades. Volte em instantes para fazer seu pedido!
                   </p>
                 </div>
-                {onBackToMerchant && (
+                {!publicMode && onBackToMerchant && (
                   <div className="pt-1">
                     <Button
                       variant="secondary"
