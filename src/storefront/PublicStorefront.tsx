@@ -54,14 +54,17 @@ export const PublicStorefront: React.FC<{ slug: string }> = ({ slug }) => {
     setError(null);
     const supabase = getSupabase();
     if (!supabase) { setError(supabaseConfigError ?? 'Supabase indisponível.'); return; }
-    supabase.rpc('get_public_store', { p_slug: slug }).then(({ data, error: rpcError }) => {
-      if (cancelled) return;
-      if (rpcError) throw rpcError;
-      if (!data) throw new Error('Loja não encontrada ou ainda não publicada.');
-      setConfig(buildConfig(data as PublicPayload));
-    }).catch((cause: unknown) => {
-      if (!cancelled) setError(cause instanceof Error ? cause.message : 'Não foi possível abrir a loja.');
-    });
+    void (async () => {
+      try {
+        const { data, error: rpcError } = await supabase.rpc('get_public_store', { p_slug: slug });
+        if (cancelled) return;
+        if (rpcError) throw rpcError;
+        if (!data) throw new Error('Loja não encontrada ou ainda não publicada.');
+        setConfig(buildConfig(data as PublicPayload));
+      } catch (cause: unknown) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Não foi possível abrir a loja.');
+      }
+    })();
     return () => { cancelled = true; };
   }, [slug, retry]);
 
