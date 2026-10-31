@@ -87,7 +87,15 @@ Deno.serve(async (req) => {
     // Payments are handled directly by the store. Do not create Asaas charges.
     // The database records payment_status='pendente' until merchant verification.
     // Never report a PIX as paid solely because an order was created.
-    return respond(201, data, headers);
+    // The order is committed already. Tracking token failure must never trigger
+    // a second order submission; return the receipt even if tracking is unavailable.
+    let trackingToken: string | null = null;
+    if (data && typeof data === 'object' && typeof data.orderId === 'string') {
+      const issued = await supabase.rpc('issue_order_tracking_token', { p_order_id: data.orderId });
+      if (issued.error) console.error('tracking token unavailable', issued.error.code);
+      else if (typeof issued.data === 'string') trackingToken = issued.data;
+    }
+    return respond(201, { ...data, trackingToken }, headers);
   } catch (error) {
     if (error instanceof Error && error.message === 'too_large') return respond(413, { error: 'Pedido muito grande.' }, headers);
     console.error('create-order unexpected failure', error instanceof Error ? error.name : 'unknown');
