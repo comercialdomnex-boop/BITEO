@@ -9,10 +9,16 @@ import {
   OrderTypeBadge,
   formatCurrency,
   formatTimeAgo,
-  getPaymentMethodLabel,
   getPaymentStatusInfo,
 } from '../../components/shared';
 import { buildWhatsAppUrl, buildTelUrl, formatPhoneMask } from '../../utils/phone';
+import {
+  canConfirmPaymentManually,
+  getManualConfirmationLabel,
+  getPaymentLabel,
+  isPrepaid,
+  isWaitingPrepaidPayment,
+} from '../../utils/paymentRules';
 import {
   Phone,
   MapPin,
@@ -58,6 +64,15 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   if (!order) return null;
 
   const paymentInfo = getPaymentStatusInfo(order.paymentStatus);
+  const paymentLabel = getPaymentLabel(order.paymentMethod, order.paymentTiming);
+  const confirmLabel = getManualConfirmationLabel(order.paymentMethod, order.paymentTiming);
+  const waitingPrepaid = isWaitingPrepaidPayment(order);
+  const canConfirmPayment = canConfirmPaymentManually(order);
+  const confirmQuestion = isPrepaid(order.paymentTiming) || order.paymentMethod === 'pix'
+    ? `Você conferiu no banco que a loja recebeu o Pix de ${formatCurrency(order.total)}?`
+    : order.paymentMethod === 'dinheiro'
+    ? `Você recebeu ${formatCurrency(order.total)} em dinheiro${order.type === 'delivery' ? ' na entrega' : ' na retirada'}?`
+    : `O pagamento de ${formatCurrency(order.total)} foi aprovado na maquininha?`;
 
   const handleConfirmPayment = async () => {
     if (!order || paymentBusy) return;
@@ -160,6 +175,8 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
     const nextStatus = OrderService.getNextStatus(order.status, order.type);
     const nextLabel = OrderService.getStatusActionLabel(order.status, order.type);
+    // Pix antecipado: preparation waits for the confirmed payment (backend enforces it too).
+    const blockedByPayment = waitingPrepaid && nextStatus === 'em_preparo';
 
     return (
       <div className="flex flex-col sm:flex-row gap-2.5 w-full">
@@ -192,8 +209,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             }
             onClick={() => onUpdateStatus(order.id, nextStatus)}
             className="flex-1"
+            disabled={blockedByPayment}
+            title={blockedByPayment ? 'Confirme o Pix antecipado antes de iniciar o preparo' : undefined}
           >
-            {nextLabel}
+            {blockedByPayment ? 'Aguardando Pix antecipado' : nextLabel}
           </Button>
         )}
       </div>
@@ -466,18 +485,24 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </span>
             </div>
 
-            {order.paymentMethod === 'pix' && order.paymentStatus === 'pendente' && order.status !== 'cancelado' && (
+            {canConfirmPayment && (
               <div className="pt-3 border-t border-zinc-800 space-y-2">
-                <p className="text-amber-300">Confira o crédito na conta bancária da loja antes de confirmar.</p>
+                <p className="text-amber-300">
+                  {waitingPrepaid
+                    ? 'Pix antecipado: o preparo só pode começar depois que você conferir o crédito na conta da loja e confirmar aqui.'
+                    : isPrepaid(order.paymentTiming) || order.paymentMethod === 'pix'
+                    ? 'Confira o crédito na conta bancária da loja antes de confirmar.'
+                    : `Pagamento ${order.type === 'delivery' ? 'na entrega' : 'na retirada'}: confirme somente depois de receber.`}
+                </p>
                 {paymentError && <p role="alert" className="text-rose-400">{paymentError}</p>}
-                <Button variant="primary" size="sm" onClick={() => { setPaymentError(null); setConfirmingPayment(true); }}>Confirmar recebimento PIX</Button>
+                <Button variant="primary" size="sm" onClick={() => { setPaymentError(null); setConfirmingPayment(true); }}>{confirmLabel}</Button>
               </div>
             )}
 
             {/* Payment Method Badge */}
             <div className="pt-2 border-t border-zinc-850 flex items-center justify-between text-[11px]">
               <span className="text-zinc-400">
-                {getPaymentMethodLabel(order.paymentMethod)}
+                {paymentLabel}
               </span>
               <span className={`font-medium ${paymentInfo.colorClass}`}>
                 {paymentInfo.label}
@@ -492,12 +517,12 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
         <Modal
           isOpen={confirmingPayment}
           onClose={() => { if (!paymentBusy) setConfirmingPayment(false); }}
-          title="Confirmar recebimento PIX"
+          title={confirmLabel}
           subtitle={`Pedido ${order.displayId}`}
           maxWidth="sm"
           footer={<div className="flex gap-2 justify-end w-full"><Button variant="secondary" size="sm" onClick={() => setConfirmingPayment(false)} isLoading={false}>Voltar</Button><Button variant="primary" size="sm" onClick={handleConfirmPayment} isLoading={paymentBusy}>Confirmar pagamento recebido</Button></div>}
         >
-          <p className="text-sm text-zinc-200">Você verificou no banco que a loja recebeu {formatCurrency(order.total)}? Esta ação registra o pagamento como pago, mas não verifica a transferência automaticamente.</p>
+          <p className="text-sm text-zinc-200">{confirmQuestion} Esta ação registra o pagamento como pago em seu nome e não pode ser desfeita pelo painel. O BITEO não verifica o recebimento automaticamente.</p>
           {paymentError && <p role="alert" className="text-sm text-rose-400 mt-2">{paymentError}</p>}
         </Modal>
       )}

@@ -7,6 +7,7 @@ import {
   Order,
   PaymentMethod,
   PaymentStatus,
+  PaymentTiming,
   buildOrderItemSnapshot,
 } from '../types';
 import { MenuService } from '../services/menuService';
@@ -287,6 +288,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       zipCode?: string;
     };
     paymentMethod: PaymentMethod;
+    paymentTiming: PaymentTiming;
     paymentStatus: PaymentStatus;
     changeFor?: number;
     generalNotes?: string;
@@ -325,6 +327,7 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
       deliveryAddress: orderPayload.deliveryAddress,
       deliveryAreaId: orderPayload.deliveryAreaId,
       paymentMethod: orderPayload.paymentMethod,
+      paymentTiming: orderPayload.paymentTiming,
       changeForCents: orderPayload.changeFor === undefined ? undefined : toCents(orderPayload.changeFor),
       notes: orderPayload.generalNotes,
       cartItems,
@@ -351,8 +354,10 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
         deliveryFee: orderPayload.deliveryFee,
         discount: 0,
         total: fromCents(receipt.totalCents),
-        paymentMethod: orderPayload.paymentMethod,
-        paymentStatus: orderPayload.paymentStatus,
+        paymentMethod: receipt.paymentMethod ?? orderPayload.paymentMethod,
+        paymentTiming: receipt.paymentTiming ?? orderPayload.paymentTiming,
+        // Never shown as paid on creation: the server always starts 'pendente'.
+        paymentStatus: 'pendente',
         changeFor: orderPayload.changeFor,
         deliveryAddress: orderPayload.deliveryAddress,
         generalNotes: orderPayload.generalNotes,

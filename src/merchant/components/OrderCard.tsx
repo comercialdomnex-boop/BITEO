@@ -7,7 +7,8 @@ import {
   formatCurrency,
   formatTimeAgo,
 } from '../../components/shared';
-import { ChevronRight, Clock, MapPin, AlertCircle, XCircle } from 'lucide-react';
+import { ChevronRight, Clock, MapPin, AlertCircle, XCircle, Wallet } from 'lucide-react';
+import { getPaymentLabel, isWaitingPrepaidPayment } from '../../utils/paymentRules';
 
 interface OrderCardProps {
   order: Order;
@@ -23,6 +24,9 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   const nextStatus = OrderService.getNextStatus(order.status, order.type);
   const quickActionLabel = OrderService.getStatusActionLabel(order.status, order.type);
 
+  const waitingPrepaid = isWaitingPrepaidPayment(order);
+  // Accepting is allowed; starting preparation waits for the confirmed Pix.
+  const quickActionBlocked = waitingPrepaid && nextStatus === 'em_preparo';
   const isNew = order.status === 'novo';
   const isCancelled = order.status === 'cancelado';
 
@@ -93,6 +97,22 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         </div>
       )}
 
+      {/* Payment: method + moment + status, independent from preparation */}
+      {!isCancelled && (
+        <div
+          className={`flex items-center gap-1.5 text-[11px] mb-2.5 ${
+            order.paymentStatus === 'pago' ? 'text-emerald-400' : 'text-amber-300'
+          }`}
+        >
+          <Wallet className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">
+            {getPaymentLabel(order.paymentMethod, order.paymentTiming)} ·{' '}
+            {order.paymentStatus === 'pago' ? 'pago' : waitingPrepaid ? 'aguardando Pix' : 'pagamento pendente'}
+            {order.changeFor ? ` · troco p/ ${formatCurrency(order.changeFor)}` : ''}
+          </span>
+        </div>
+      )}
+
       {/* General Notes if present */}
       {order.generalNotes && (
         <div className="flex items-start gap-1 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1 mb-2.5">
@@ -121,7 +141,12 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {nextStatus && onQuickAdvanceStatus && (
+          {quickActionBlocked && (
+            <span className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30">
+              Aguardando Pix
+            </span>
+          )}
+          {nextStatus && onQuickAdvanceStatus && !quickActionBlocked && (
             <button
               onClick={e => {
                 e.stopPropagation();

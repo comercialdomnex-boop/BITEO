@@ -11,6 +11,7 @@ interface OrdersFilterTabsProps {
     todos: number;
     novo: number;
     em_preparo: number;
+    pronto: number;
     em_entrega: number;
     concluido: number;
     cancelado: number;
@@ -28,6 +29,7 @@ export const OrdersFilterTabs: React.FC<OrdersFilterTabsProps> = ({
     { id: 'todos', label: 'Todos', count: statusCounts.todos },
     { id: 'novo', label: 'Novos', count: statusCounts.novo, badgeColor: 'bg-orange-500' },
     { id: 'em_preparo', label: 'Em Preparo', count: statusCounts.em_preparo, badgeColor: 'bg-amber-500' },
+    { id: 'pronto', label: 'Prontos', count: statusCounts.pronto, badgeColor: 'bg-emerald-500' },
     { id: 'em_entrega', label: 'Em Entrega', count: statusCounts.em_entrega, badgeColor: 'bg-sky-500' },
     { id: 'concluido', label: 'Concluídos', count: statusCounts.concluido },
     { id: 'cancelado', label: 'Cancelados', count: statusCounts.cancelado },

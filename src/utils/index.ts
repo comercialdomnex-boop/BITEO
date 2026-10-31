@@ -23,3 +23,18 @@ export {
   isStoreEffectivelyOpen,
 } from './hours';
 export type { ScheduleEvaluation } from './hours';
+export {
+  paymentOptionId,
+  onReceiptTiming,
+  isPrepaid,
+  getPaymentTimingLabel,
+  getPaymentLabel,
+  getAvailablePaymentOptions,
+  canStartPreparation,
+  isWaitingPrepaidPayment,
+  canConfirmPaymentManually,
+  getCustomerPaymentInstructions,
+  getManualConfirmationLabel,
+  getConfirmationHeadline,
+} from './paymentRules';
+export type { PaymentOption, CustomerPaymentInstructions } from './paymentRules';

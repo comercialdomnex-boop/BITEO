@@ -20,6 +20,16 @@ export type PaymentMethod = 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinhei
 export type PaymentStatus = 'pendente' | 'pago' | 'falhou' | 'reembolsado';
 
 /**
+ * When the customer pays. Independent from the preparation status.
+ * - antecipado: Pix paid before preparation (requires real confirmation).
+ * - na_entrega / na_retirada: paid on delivery or at the counter.
+ */
+export type PaymentTiming = 'antecipado' | 'na_entrega' | 'na_retirada';
+
+/** Who confirmed a received payment: the merchant or the Pix provider. */
+export type PaymentConfirmationSource = 'manual' | 'provider';
+
+/**
  * Snapshot of a selected modifier option. It intentionally duplicates the menu
  * values so a historical order can be rendered/repriced even after the menu
  * changes or the option is deleted.
@@ -96,7 +106,10 @@ export interface Order {
   discount: number;
   total: number;
   paymentMethod: PaymentMethod;
+  paymentTiming: PaymentTiming;
   paymentStatus: PaymentStatus;
+  paymentConfirmedAt?: string;
+  paymentConfirmationSource?: PaymentConfirmationSource;
   changeFor?: number;
   createdAt: string; // ISO string
   estimatedTimeMin?: number;

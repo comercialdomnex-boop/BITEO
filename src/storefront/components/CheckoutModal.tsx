@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StoreConfig, PaymentMethod, PaymentStatus } from '../../types';
+import { StoreConfig, PaymentMethod, PaymentStatus, PaymentTiming } from '../../types';
+import {
+  getAvailablePaymentOptions,
+  getPaymentLabel,
+  onReceiptTiming,
+  paymentOptionId,
+} from '../../utils/paymentRules';
 import { CartItem, CustomerFormData, AddressFormData, PaymentFormData } from '../types';
 import { formatCurrency, Modal, calculateCartTotals } from '../../components/shared';
 import { RestaurantService } from '../../services/restaurantService';
@@ -45,6 +51,7 @@ interface CheckoutModalProps {
       zipCode?: string;
     };
     paymentMethod: PaymentMethod;
+    paymentTiming: PaymentTiming;
     paymentStatus: PaymentStatus;
     changeFor?: number;
     generalNotes?: string;
@@ -149,20 +156,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   }>({});
 
   // Form State: Payment
-  const defaultPaymentMethod: PaymentMethod = payments.acceptPix
-    ? 'pix'
-    : payments.acceptCreditCard
-    ? 'cartao_credito'
-    : payments.acceptDebitCard
-    ? 'cartao_debito'
-    : 'dinheiro';
+  // Options depend on the store settings and on delivery vs pickup.
+  const paymentOptions = getAvailablePaymentOptions(payments, orderModality);
+  const firstOption = paymentOptions[0];
 
   const [payment, setPayment] = useState<PaymentFormData>({
-    method: defaultPaymentMethod,
+    method: firstOption?.method ?? 'dinheiro',
+    timing: firstOption?.timing ?? onReceiptTiming(orderModality),
     needChange: false,
     changeFor: '',
   });
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const selectedPaymentId = paymentOptionId(payment.method, payment.timing);
+  const paymentOptionIds = paymentOptions.map(o => o.id).join('|');
+
+  // Switching delivery <-> pickup turns "na entrega" into "na retirada".
+  // Keep the same method and moment when possible, else use the first option.
+  useEffect(() => {
+    if (paymentOptions.some(o => o.id === selectedPaymentId)) return;
+    const sameChoice = paymentOptions.find(
+      o => o.method === payment.method && (o.timing === 'antecipado') === (payment.timing === 'antecipado')
+    );
+    const next = sameChoice ?? paymentOptions[0];
+    if (next) setPayment(prev => ({ ...prev, method: next.method, timing: next.timing }));
+  }, [paymentOptionIds, selectedPaymentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // General notes
   const [generalNotes, setGeneralNotes] = useState<string>('');
@@ -236,6 +253,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   // Step 3 validation
   const validateStep3 = () => {
     setPaymentError(null);
+    if (!paymentOptions.some(o => o.id === selectedPaymentId)) {
+      setPaymentError('Escolha uma forma de pagamento disponível.');
+      return false;
+    }
     if (payment.method === 'dinheiro' && payment.needChange) {
       const changeNum = parseMoneyInput(payment.changeFor);
       if (changeNum === null || changeNum < total) {
@@ -293,6 +314,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               }
             : undefined,
         paymentMethod: payment.method,
+        paymentTiming: payment.timing,
         // No channel marks money as paid: every new order starts neutral.
         paymentStatus: 'pendente',
         changeFor: changeForInput ?? undefined,
@@ -837,328 +859,186 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               Escolha como deseja pagar:
             </span>
 
-            <div className="space-y-2">
-              {/* PIX */}
-              {payments.acceptPix && (
-                <div
-                  onClick={() => setPayment(prev => ({ ...prev, method: 'pix' }))}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      setPayment(prev => ({ ...prev, method: 'pix' }));
-                    }
-                  }}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                    payment.method === 'pix'
-                      ? 'bg-zinc-800 border-zinc-650 shadow-md'
-                      : 'bg-zinc-900/70 border-zinc-800 hover:bg-zinc-850/80 text-zinc-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold">
-                        <QrCode className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                          <span>PIX — aguardando pagamento</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300">
-                            Confirmação após pagamento
-                          </span>
-                        </h4>
-                        <p className="text-[11px] text-zinc-400">
-                          Pague pelo app do seu banco com chave ou QR Code
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        payment.method === 'pix'
-                          ? 'border-transparent text-white'
-                          : 'border-zinc-700'
-                      }`}
-                      style={{
-                        backgroundColor: payment.method === 'pix' ? primaryColor : undefined,
-                      }}
-                    >
-                      {payment.method === 'pix' && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                  </div>
-
-                  {payment.method === 'pix' && (
-                    <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
-                      <div className="p-3 bg-zinc-900 rounded-xl border border-zinc-800 flex items-center justify-between gap-2">
-                        <div className="truncate">
-                          <span className="text-[10px] text-zinc-500 block uppercase font-mono">
-                            Chave PIX
-                          </span>
-                          <span className="text-xs font-mono font-bold text-teal-400 truncate block">
-                            {payments.pixKey ||
-                              'chave pix não configurada nesta loja'}
-                          </span>
+            <div className="space-y-2" role="radiogroup" aria-label="Forma de pagamento">
+              {paymentOptions.length === 0 && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs">
+                  Esta loja não tem formas de pagamento disponíveis para{' '}
+                  {orderModality === 'delivery' ? 'entrega' : 'retirada'}. Fale com o estabelecimento.
+                </div>
+              )}
+              {paymentOptions.map(option => {
+                const selected = option.id === selectedPaymentId;
+                const Icon =
+                  option.method === 'pix' ? QrCode : option.method === 'dinheiro' ? Banknote : CreditCard;
+                const iconTone =
+                  option.method === 'pix'
+                    ? 'bg-teal-500/20 text-teal-400'
+                    : option.method === 'dinheiro'
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : option.method === 'cartao_credito'
+                    ? 'bg-sky-500/20 text-sky-400'
+                    : 'bg-purple-500/20 text-purple-400';
+                const choose = () => {
+                  setPayment(prev => ({ ...prev, method: option.method, timing: option.timing }));
+                  setPaymentError(null);
+                };
+                return (
+                  <div
+                    key={option.id}
+                    onClick={choose}
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={0}
+                    onKeyDown={e => {
+                      if (e.target === e.currentTarget && (e.key === ' ' || e.key === 'Enter')) choose();
+                    }}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                      selected
+                        ? 'bg-zinc-800 border-zinc-650 shadow-md'
+                        : 'bg-zinc-900/70 border-zinc-800 hover:bg-zinc-850/80 text-zinc-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${iconTone}`}>
+                          <Icon className="w-4 h-4" />
                         </div>
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleCopyPixKey();
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-750 text-white text-xs font-medium flex items-center gap-1 shrink-0 transition-colors"
-                        >
-                          {copiedPix ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-400">Copiado</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3 text-zinc-400" />
-                              <span>Copiar</span>
-                            </>
-                          )}
-                        </button>
+                        <div>
+                          <h4 className="text-xs font-bold text-white flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span>{option.label}</span>
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                option.timing === 'antecipado'
+                                  ? 'bg-teal-500/20 text-teal-300'
+                                  : 'bg-zinc-700/60 text-zinc-300'
+                              }`}
+                            >
+                              {option.timing === 'antecipado' ? 'Pagar agora' : 'Pagar ao receber'}
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-zinc-400">{option.description}</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {/* Cartão de Crédito na Entrega */}
-              {payments.acceptCreditCard && (
-                <div
-                  onClick={() =>
-                    setPayment(prev => ({ ...prev, method: 'cartao_credito' }))
-                  }
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      setPayment(prev => ({ ...prev, method: 'cartao_credito' }));
-                    }
-                  }}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                    payment.method === 'cartao_credito'
-                      ? 'bg-zinc-800 border-zinc-650 shadow-md'
-                      : 'bg-zinc-900/70 border-zinc-800 hover:bg-zinc-850/80 text-zinc-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
-                        <CreditCard className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white">
-                          Cartão de Crédito na Entrega
-                        </h4>
-                        <p className="text-[11px] text-zinc-400">
-                          {payments.cardPaymentOnDeliveryNote ||
-                            'O entregador levará a maquininha'}
-                        </p>
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                          selected ? 'border-transparent text-white' : 'border-zinc-700'
+                        }`}
+                        style={{ backgroundColor: selected ? primaryColor : undefined }}
+                      >
+                        {selected && <Check className="w-3 h-3 stroke-[3]" />}
                       </div>
                     </div>
 
-                    <div
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        payment.method === 'cartao_credito'
-                          ? 'border-transparent text-white'
-                          : 'border-zinc-700'
-                      }`}
-                      style={{
-                        backgroundColor:
-                          payment.method === 'cartao_credito' ? primaryColor : undefined,
-                      }}
-                    >
-                      {payment.method === 'cartao_credito' && (
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Cartão de Débito na Entrega */}
-              {payments.acceptDebitCard && (
-                <div
-                  onClick={() =>
-                    setPayment(prev => ({ ...prev, method: 'cartao_debito' }))
-                  }
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      setPayment(prev => ({ ...prev, method: 'cartao_debito' }));
-                    }
-                  }}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                    payment.method === 'cartao_debito'
-                      ? 'bg-zinc-800 border-zinc-650 shadow-md'
-                      : 'bg-zinc-900/70 border-zinc-800 hover:bg-zinc-850/80 text-zinc-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
-                        <CreditCard className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white">
-                          Cartão de Débito na Entrega
-                        </h4>
-                        <p className="text-[11px] text-zinc-400">
-                          Pague ao receber na maquininha
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        payment.method === 'cartao_debito'
-                          ? 'border-transparent text-white'
-                          : 'border-zinc-700'
-                      }`}
-                      style={{
-                        backgroundColor:
-                          payment.method === 'cartao_debito' ? primaryColor : undefined,
-                      }}
-                    >
-                      {payment.method === 'cartao_debito' && (
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Dinheiro */}
-              {payments.acceptCash && (
-                <div
-                  onClick={() =>
-                    setPayment(prev => ({ ...prev, method: 'dinheiro' }))
-                  }
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      setPayment(prev => ({ ...prev, method: 'dinheiro' }));
-                    }
-                  }}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                    payment.method === 'dinheiro'
-                      ? 'bg-zinc-800 border-zinc-650 shadow-md'
-                      : 'bg-zinc-900/70 border-zinc-800 hover:bg-zinc-850/80 text-zinc-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-                        <Banknote className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white">
-                          Dinheiro na Entrega
-                        </h4>
-                        <p className="text-[11px] text-zinc-400">
-                          Pagamento em cédulas
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        payment.method === 'dinheiro'
-                          ? 'border-transparent text-white'
-                          : 'border-zinc-700'
-                      }`}
-                      style={{
-                        backgroundColor:
-                          payment.method === 'dinheiro' ? primaryColor : undefined,
-                      }}
-                    >
-                      {payment.method === 'dinheiro' && (
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      )}
-                    </div>
-                  </div>
-
-                  {payment.method === 'dinheiro' && (
-                    <div className="mt-3 pt-3 border-t border-zinc-800 space-y-3">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-300 font-medium">Precisa de troco?</span>
-                        <div className="flex items-center gap-2">
+                    {selected && option.timing === 'antecipado' && (
+                      <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
+                        <div className="p-3 bg-zinc-900 rounded-xl border border-zinc-800 flex items-center justify-between gap-2">
+                          <div className="truncate">
+                            <span className="text-[10px] text-zinc-500 block uppercase font-mono">
+                              Chave PIX
+                            </span>
+                            <span className="text-xs font-mono font-bold text-teal-400 truncate block">
+                              {payments.pixKey}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={e => {
                               e.stopPropagation();
-                              setPayment(prev => ({ ...prev, needChange: false }));
+                              handleCopyPixKey();
                             }}
-                            className={`px-3 py-1 rounded-lg text-xs font-semibold ${
-                              !payment.needChange
-                                ? 'bg-zinc-700 text-white'
-                                : 'bg-zinc-900 text-zinc-400'
-                            }`}
+                            className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-750 text-white text-xs font-medium flex items-center gap-1 shrink-0 transition-colors"
                           >
-                            Não
-                          </button>
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              setPayment(prev => ({ ...prev, needChange: true }));
-                            }}
-                            className={`px-3 py-1 rounded-lg text-xs font-semibold ${
-                              payment.needChange
-                                ? 'bg-zinc-700 text-white'
-                                : 'bg-zinc-900 text-zinc-400'
-                            }`}
-                          >
-                            Sim
+                            {copiedPix ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-400">Copiado</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-zinc-400" />
+                                <span>Copiar</span>
+                              </>
+                            )}
                           </button>
                         </div>
+                        <p className="text-[11px] text-amber-300/90">
+                          Seu pedido fica aguardando pagamento e só entra em preparo depois que a loja confirmar o Pix de {formatCurrency(total)}.
+                        </p>
                       </div>
+                    )}
 
-                      {payment.needChange && (
-                        <div className="space-y-1.5">
-                          <label className="block text-[11px] text-zinc-400">
-                            Troco para quanto? (R$)
-                          </label>
-                          <input
-                            type="text"
-                            value={payment.changeFor}
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => {
-                              const val = e.target.value.replace(/[^0-9,.]/g, '');
-                              setPayment(prev => ({ ...prev, changeFor: val }));
-                              setPaymentError(null);
-                            }}
-                            placeholder={`Ex: ${Math.ceil(total / 10) * 10 || 50}`}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white font-mono placeholder-zinc-500 focus:outline-hidden focus:border-orange-500"
-                          />
-                          {payment.changeFor && (
-                            <div className="text-[11px] font-mono text-emerald-400 pt-0.5">
-                              {(() => {
-                                const parsed = parseMoneyInput(payment.changeFor);
-                                if (parsed === null || parsed < total) {
-                                  return (
-                                    <span className="text-rose-400">
-                                      Valor menor que o total ({formatCurrency(total)})
-                                    </span>
-                                  );
-                                }
-                                return `Seu troco será: ${formatCurrency(
-                                  parsed - total
-                                )}`;
-                              })()}
-                            </div>
-                          )}
+                    {selected && option.method === 'dinheiro' && (
+                      <div className="mt-3 pt-3 border-t border-zinc-800 space-y-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-300 font-medium">Precisa de troco?</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setPayment(prev => ({ ...prev, needChange: false }));
+                              }}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                                !payment.needChange ? 'bg-zinc-700 text-white' : 'bg-zinc-900 text-zinc-400'
+                              }`}
+                            >
+                              Não
+                            </button>
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setPayment(prev => ({ ...prev, needChange: true }));
+                              }}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                                payment.needChange ? 'bg-zinc-700 text-white' : 'bg-zinc-900 text-zinc-400'
+                              }`}
+                            >
+                              Sim
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+
+                        {payment.needChange && (
+                          <div className="space-y-1.5">
+                            <label className="block text-[11px] text-zinc-400">
+                              Troco para quanto? (R$)
+                            </label>
+                            <input
+                              type="text"
+                              value={payment.changeFor}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => {
+                                const val = e.target.value.replace(/[^0-9,.]/g, '');
+                                setPayment(prev => ({ ...prev, changeFor: val }));
+                                setPaymentError(null);
+                              }}
+                              placeholder={`Ex: ${Math.ceil(total / 10) * 10 || 50}`}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white font-mono placeholder-zinc-500 focus:outline-hidden focus:border-orange-500"
+                            />
+                            {payment.changeFor && (
+                              <div className="text-[11px] font-mono text-emerald-400 pt-0.5">
+                                {(() => {
+                                  const parsed = parseMoneyInput(payment.changeFor);
+                                  if (parsed === null || parsed < total) {
+                                    return (
+                                      <span className="text-rose-400">
+                                        Valor menor que o total ({formatCurrency(total)})
+                                      </span>
+                                    );
+                                  }
+                                  return `Seu troco será: ${formatCurrency(parsed - total)}`;
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {paymentError && (
@@ -1229,23 +1109,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
 
               {/* Payment Summary */}
-              <div className="pt-2 border-t border-zinc-800 flex items-center justify-between">
-                <span className="text-zinc-400">Forma de Pagamento:</span>
-                <span className="font-semibold text-white">
-                  {payment.method === 'pix'
-                    ? 'PIX Instantâneo'
-                    : payment.method === 'cartao_credito'
-                    ? 'Cartão de Crédito na Entrega'
-                    : payment.method === 'cartao_debito'
-                    ? 'Cartão de Débito na Entrega'
-                    : `Dinheiro ${
-                        payment.needChange && payment.changeFor
-                          ? `(Troco p/ ${formatCurrency(
-                              parseMoneyInput(payment.changeFor) ?? 0
-                            )})`
-                          : '(Sem troco)'
-                      }`}
-                </span>
+              <div className="pt-2 border-t border-zinc-800 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-zinc-400">Forma de Pagamento:</span>
+                  <span className="font-semibold text-white text-right">
+                    {getPaymentLabel(payment.method, payment.timing)}
+                    {payment.method === 'dinheiro' &&
+                      (payment.needChange && payment.changeFor
+                        ? ` (Troco p/ ${formatCurrency(parseMoneyInput(payment.changeFor) ?? 0)})`
+                        : ' (Sem troco)')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-300/90">
+                  {payment.timing === 'antecipado'
+                    ? 'Você vai pagar com Pix agora. O preparo começa após a loja confirmar o pagamento.'
+                    : `Você paga ${orderModality === 'delivery' ? 'na entrega' : 'na retirada'}. Nada é cobrado agora.`}
+                </p>
               </div>
 
               {generalNotes && (

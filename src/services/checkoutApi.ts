@@ -15,6 +15,8 @@ export interface CheckoutInput {
   };
   deliveryAreaId?: string;
   paymentMethod: 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro';
+  /** When the customer pays. The server re-validates it against store settings. */
+  paymentTiming: 'antecipado' | 'na_entrega' | 'na_retirada';
   changeForCents?: number;
   notes?: string;
   cartItems: CartItem[];
@@ -31,6 +33,10 @@ export interface CreatedOrderResponse {
   orderNumber: number;
   totalCents: number;
   status: 'novo';
+  paymentMethod?: 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro';
+  paymentTiming?: 'antecipado' | 'na_entrega' | 'na_retirada';
+  /** Always 'pendente' on creation: no order is created as paid. */
+  paymentStatus?: 'pendente';
 }
 
 const attempts = new Map<string, { fingerprint: string; requestId: string }>();
@@ -48,6 +54,7 @@ export async function submitGuestOrder(input: CheckoutInput): Promise<CreatedOrd
     deliveryAddress: input.type === 'delivery' ? input.deliveryAddress : undefined,
     deliveryAreaId: input.type === 'delivery' ? input.deliveryAreaId : undefined,
     paymentMethod: input.paymentMethod,
+    paymentTiming: input.paymentTiming,
     changeForCents: input.paymentMethod === 'dinheiro' ? input.changeForCents : undefined,
     notes: input.notes,
     items: input.cartItems.map((line) => ({

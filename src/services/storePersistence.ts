@@ -19,6 +19,7 @@ export interface StoreSettingsRow {
   pickup_time_min_minutes: number | null;
   pickup_time_max_minutes: number | null;
   accept_pix: boolean;
+  accept_pix_prepaid: boolean;
   pix_key: string | null;
   accept_cash: boolean;
   cash_change_available: boolean;
@@ -30,7 +31,7 @@ export interface StoreSettingsRow {
 }
 
 const SETTINGS_SELECT =
-  'store_id, allow_delivery, allow_pickup, fixed_delivery_fee_cents, free_delivery_threshold_cents, minimum_order_cents, prep_time_min, delivery_time_min_minutes, delivery_time_max_minutes, pickup_time_min_minutes, pickup_time_max_minutes, accept_pix, pix_key, accept_cash, cash_change_available, accept_credit_card, accept_debit_card, card_payment_note, auto_accept_orders, sound_alerts_enabled';
+  'store_id, allow_delivery, allow_pickup, fixed_delivery_fee_cents, free_delivery_threshold_cents, minimum_order_cents, prep_time_min, delivery_time_min_minutes, delivery_time_max_minutes, pickup_time_min_minutes, pickup_time_max_minutes, accept_pix, accept_pix_prepaid, pix_key, accept_cash, cash_change_available, accept_credit_card, accept_debit_card, card_payment_note, auto_accept_orders, sound_alerts_enabled';
 
 function blankToNull(value: string | null | undefined): string | null {
   const trimmed = (value ?? '').trim();
@@ -170,6 +171,7 @@ export function applyStoreSettingsToConfig(
     payments: {
       ...config.payments,
       acceptPix: row.accept_pix,
+      acceptPixPrepaid: row.accept_pix_prepaid ?? false,
       pixKey: row.pix_key ?? undefined,
       acceptCash: row.accept_cash,
       cashNeedChange: row.cash_change_available,
@@ -447,6 +449,7 @@ export async function savePaymentMethods(
 
   const settingsPayload: Record<string, unknown> = {
     accept_pix: payments.acceptPix,
+    accept_pix_prepaid: payments.acceptPixPrepaid,
     pix_key: blankToNull(payments.pixKey),
     accept_cash: payments.acceptCash,
     cash_change_available: payments.cashNeedChange,

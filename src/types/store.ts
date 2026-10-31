@@ -81,6 +81,9 @@ export interface DeliverySettings {
 }
 
 export interface PaymentMethods {
+  /** Pix paid before preparation. Orders wait for confirmed payment. */
+  acceptPixPrepaid: boolean;
+  /** Pix paid on delivery or at pickup. Does not block preparation. */
   acceptPix: boolean;
   pixKey?: string;
   acceptCash: boolean;

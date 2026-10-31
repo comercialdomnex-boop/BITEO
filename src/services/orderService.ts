@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { phoneIdentity } from '../utils/phone';
 import { fromCents, sumCents } from '../utils/money';
+import { canStartPreparation } from '../utils/paymentRules';
 
 function highestOrderNumber(orders: Order[]): number {
   return orders.reduce((max, order) => {
@@ -252,6 +253,13 @@ export class OrderService {
     if (!this.canTransition(order.status, newStatus, order.type)) {
       throw new Error(
         `Transição de status inválida: pedido ${order.displayId} está '${order.status}' e não pode transitar para '${newStatus}'.`
+      );
+    }
+
+    // Same rule as the backend: Pix antecipado only enters preparation once paid.
+    if (newStatus === 'em_preparo' && !canStartPreparation(order)) {
+      throw new Error(
+        `Pedido ${order.displayId} aguarda a confirmação do Pix antecipado. Confirme o pagamento antes de iniciar o preparo.`
       );
     }
 

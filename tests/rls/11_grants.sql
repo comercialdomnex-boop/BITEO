@@ -72,7 +72,7 @@ grant update (
   delivery_area_name,
   estimated_minutes,
   payment_method,
-  payment_status,
+  -- payment_status: sem UPDATE direto desde 20261031120000 (somente RPCs).
   notes
 ) on public.orders to authenticated;
 
