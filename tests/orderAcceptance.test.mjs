@@ -6,7 +6,7 @@ const result = await build({
   stdin: { contents: `export * from './src/services/orderService'; export * from './src/services/orderAcceptancePersistence'; export * from './src/services/restaurantService'; export * from './src/services/storeService'; export * from './src/merchant/components/OrderAcceptanceControl';`, resolveDir: process.cwd() },
   bundle: true, write: false, platform: 'node', format: 'esm',
   plugins: [{ name: 'test-client', setup(build) {
-    build.onLoad({ filter: /\/lib\/supabase\.ts$/ }, () => ({ contents: `export const supabaseConfigError = 'Missing config'; export const getSupabase = () => globalThis.acceptanceTestClient;`, loader: 'ts' }));
+    build.onLoad({ filter: /[\\/]lib[\\/]supabase\.ts$/ }, () => ({ contents: `export const supabaseConfigError = 'Missing config'; export const getSupabase = () => globalThis.acceptanceTestClient;`, loader: 'ts' }));
   } }],
 });
 const { OrderService, StoreService, saveOrderAcceptance, RestaurantService, createEmptyStoreConfig, OrderAcceptanceControl, orderAvailabilityLabel } = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
