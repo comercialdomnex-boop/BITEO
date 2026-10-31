@@ -305,6 +305,7 @@ export default function App() {
   return (
     <OnboardingWizard
             onComplete={handleOnboardingComplete}
+            additionalStore={availableStores.length > 0}
             onCancel={
               currentUser && availableStores.length > 0
                 ? () => setCurrentRoute('merchant')
