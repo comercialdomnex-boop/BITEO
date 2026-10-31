@@ -45,58 +45,7 @@ alter table public.orders
   add column if not exists payment_confirmed_by uuid references public.profiles (id) on delete set null,
   add column if not exists payment_confirmation_source text;
 
--- Pedidos Pix que já têm cobrança no provedor eram pagamentos antecipados:
--- precisam continuar confirmáveis pelo webhook (confirm_asaas_pix_payment).
-update public.orders o
-   set payment_timing = 'antecipado'
- where o.payment_timing is null
-   and o.payment_method = 'pix'
-   and exists (select 1 from public.order_pix_payments p where p.order_id = o.id);
-
--- Demais pedidos existentes nunca tiveram pagamento antecipado obrigatório.
-update public.orders
-   set payment_timing = case when fulfillment_type = 'delivery' then 'na_entrega' else 'na_retirada' end
- where payment_timing is null;
-
--- Pedidos já pagos ganham trilha de confirmação coerente.
-update public.orders o
-   set payment_confirmation_source = case
-         when exists (select 1 from public.order_pix_payments p
-                       where p.order_id = o.id and p.status in ('confirmed', 'received'))
-         then 'provider' else 'manual' end,
-       payment_confirmed_at = coalesce(
-         (select max(p.confirmed_at) from public.order_pix_payments p
-           where p.order_id = o.id and p.status in ('confirmed', 'received')),
-         o.updated_at)
- where o.payment_status = 'pago'
-   and o.payment_confirmed_at is null;
-
-alter table public.orders alter column payment_timing set not null;
-
-alter table public.orders
-  drop constraint if exists orders_payment_timing_check,
-  add constraint orders_payment_timing_check check (
-    payment_timing in ('antecipado', 'na_entrega', 'na_retirada')
-  ),
-  drop constraint if exists orders_payment_timing_matches_fulfillment,
-  add constraint orders_payment_timing_matches_fulfillment check (
-    payment_timing = 'antecipado'
-    or (payment_timing = 'na_entrega' and fulfillment_type = 'delivery')
-    or (payment_timing = 'na_retirada' and fulfillment_type = 'retirada')
-  ),
-  drop constraint if exists orders_prepaid_requires_pix,
-  add constraint orders_prepaid_requires_pix check (
-    payment_timing <> 'antecipado' or payment_method = 'pix'
-  ),
-  drop constraint if exists orders_payment_confirmation_source_check,
-  add constraint orders_payment_confirmation_source_check check (
-    payment_confirmation_source is null or payment_confirmation_source in ('manual', 'provider')
-  ),
-  drop constraint if exists orders_paid_has_confirmation,
-  add constraint orders_paid_has_confirmation check (
-    payment_status <> 'pago'
-    or (payment_confirmed_at is not null and payment_confirmation_source is not null)
-  );
+-- Backfill de pedidos existentes ao final da migration, depois de todo DDL.
 
 comment on column public.orders.payment_timing is
   'Quando o cliente paga: antecipado (Pix antes do preparo), na_entrega ou na_retirada. Independe de status (preparo).';
@@ -848,3 +797,31 @@ $function$;
 
 revoke all on function public.create_guest_order(jsonb) from public, anon, authenticated;
 grant execute on function public.create_guest_order(jsonb) to service_role;
+
+-- Backfill: última etapa desta transação; constraints são aplicadas após o commit.
+-- Pedidos Pix que já têm cobrança no provedor eram pagamentos antecipados:
+-- precisam continuar confirmáveis pelo webhook (confirm_asaas_pix_payment).
+update public.orders o
+   set payment_timing = 'antecipado'
+ where o.payment_timing is null
+   and o.payment_method = 'pix'
+   and exists (select 1 from public.order_pix_payments p where p.order_id = o.id);
+
+-- Demais pedidos existentes nunca tiveram pagamento antecipado obrigatório.
+update public.orders
+   set payment_timing = case when fulfillment_type = 'delivery' then 'na_entrega' else 'na_retirada' end
+ where payment_timing is null;
+
+-- Pedidos já pagos ganham trilha de confirmação coerente.
+update public.orders o
+   set payment_confirmation_source = case
+         when exists (select 1 from public.order_pix_payments p
+                       where p.order_id = o.id and p.status in ('confirmed', 'received'))
+         then 'provider' else 'manual' end,
+       payment_confirmed_at = coalesce(
+         (select max(p.confirmed_at) from public.order_pix_payments p
+           where p.order_id = o.id and p.status in ('confirmed', 'received')),
+         o.updated_at)
+ where o.payment_status = 'pago'
+   and o.payment_confirmed_at is null;
+
