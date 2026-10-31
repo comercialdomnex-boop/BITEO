@@ -20,18 +20,18 @@ grant execute on function public.get_public_store(text) to anon, authenticated;
 
 -- Grant only SELECT, with RLS constraining every table to public catalog rows.
 grant select on public.stores, public.categories, public.products,
-  public.product_modifier_groups, public.modifier_options to anon;
+  public.product_modifier_groups, public.modifier_options to anon, authenticated;
 create policy "public published store read" on public.stores
-  for select to anon using (is_published and deleted_at is null);
+  for select to anon, authenticated using (is_published and deleted_at is null);
 create policy "public published categories read" on public.categories
-  for select to anon using (deleted_at is null and is_active and exists (
+  for select to anon, authenticated using (deleted_at is null and is_active and exists (
     select 1 from public.stores s where s.id=store_id and s.is_published and s.deleted_at is null));
 create policy "public published products read" on public.products
-  for select to anon using (deleted_at is null and is_available and exists (
+  for select to anon, authenticated using (deleted_at is null and is_available and exists (
     select 1 from public.stores s where s.id=store_id and s.is_published and s.deleted_at is null));
 create policy "public published modifier groups read" on public.product_modifier_groups
-  for select to anon using (deleted_at is null and is_active and exists (
+  for select to anon, authenticated using (deleted_at is null and is_active and exists (
     select 1 from public.stores s where s.id=store_id and s.is_published and s.deleted_at is null));
 create policy "public published modifier options read" on public.modifier_options
-  for select to anon using (deleted_at is null and is_available and exists (
+  for select to anon, authenticated using (deleted_at is null and is_available and exists (
     select 1 from public.stores s where s.id=store_id and s.is_published and s.deleted_at is null));
