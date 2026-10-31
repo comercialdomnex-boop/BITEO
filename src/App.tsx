@@ -10,6 +10,7 @@ import { createEmptyStoreConfig, StoreService } from './services/storeService';
 import { MerchantApp } from './merchant/MerchantApp';
 import { StorefrontApp } from './storefront/StorefrontApp';
 import { PublicStorefront } from './storefront/PublicStorefront';
+import { PublicOrderTracking } from './storefront/PublicOrderTracking';
 import { LoginView } from './auth/LoginView';
 import { RegisterView } from './auth/RegisterView';
 import { ResetPasswordView } from './auth/ResetPasswordView';
@@ -366,7 +367,9 @@ default:
         </div>
       )}
       <main className="flex-1 w-full">
-        {publicSlug ? <PublicStorefront slug={publicSlug} /> : renderCurrentView(false)}
+        {publicSlug ? (/^#\/pedido\/[0-9a-f]{64}$/.test(window.location.hash)
+          ? <PublicOrderTracking slug={publicSlug} token={window.location.hash.slice('#/pedido/'.length)} />
+          : <PublicStorefront slug={publicSlug} />) : renderCurrentView(false)}
       </main>
     </div>
   );
