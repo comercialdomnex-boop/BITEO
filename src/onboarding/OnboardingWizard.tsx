@@ -35,6 +35,7 @@ interface OnboardingWizardProps {
   onComplete: (store: StoreInstance, targetView: 'merchant' | 'storefront') => void;
   onCancel?: () => void;
   userInitialName?: string;
+  additionalStore?: boolean;
 }
 
 const CATEGORIES = [
@@ -63,6 +64,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onComplete,
   onCancel,
   userInitialName = '',
+  additionalStore = false,
 }) => {
   const { currentUser } = useAuth();
 
@@ -222,7 +224,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         addressNeighborhood: neighborhood,
         phone,
         whatsapp,
-      });
+      }, additionalStore);
 
       const store = buildStoreInstanceFromRow(row);
       SessionService.registerCreatedStore(store, currentUser.id);
