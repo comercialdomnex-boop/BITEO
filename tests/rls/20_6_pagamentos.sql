@@ -22,7 +22,15 @@ insert into public.orders (
   fulfillment_type, status, payment_method, subtotal_cents, delivery_fee_cents, discount_cents, total_cents
 )
 values
-  ('20000000-0000-4000-8000-000000000102','10000000-0000-4000-8000-00000000000a',102,'Cliente P2','+5511999999970','+5511999999970','retirada','aceito','dinheiro',4500,0,0,4500);
+  ('20000000-0000-4000-8000-000000000102','10000000-0000-4000-8000-00000000000a',102,'Cliente P2','+5511999999970','+5511999999970','retirada','aceito','dinheiro',4500,0,0,4500),
+  -- 0104 P_PIXDELIV  delivery  novo  pix  na_entrega (padrao)  pendente
+  ('20000000-0000-4000-8000-000000000104','10000000-0000-4000-8000-00000000000a',104,'Cliente P4','+5511999999970','+5511999999970','delivery','novo','pix',4500,700,0,5200);
+
+-- Cobrancas sandbox do provedor para 0103 (antecipado) e 0104 (na entrega).
+insert into public.order_pix_payments (order_id, store_id, amount_cents, status, provider_payment_id)
+values
+  ('20000000-0000-4000-8000-000000000103','10000000-0000-4000-8000-00000000000a',5200,'awaiting_payment','pay_test0103'),
+  ('20000000-0000-4000-8000-000000000104','10000000-0000-4000-8000-00000000000a',5200,'awaiting_payment','pay_test0104');
 
 -- -----------------------------------------------------------------------------
 -- 12.1 Estrutura e padroes
@@ -149,4 +157,77 @@ select rls_check.t('12 pagamentos','SISTEMA','authenticated sem UPDATE em paymen
 
 select rls_check.t('12 pagamentos','SISTEMA','authenticated sem UPDATE em payment_timing','postgres',null,
   $sql$select has_column_privilege('authenticated', 'public.orders', 'payment_timing', 'update')::text$sql$,
+  'val:false');
+
+-- -----------------------------------------------------------------------------
+-- 12.6 Mesmo com GRANT de UPDATE indevido, o trigger bloqueia SQL direto.
+--      Simula um "grant all" acidental; revogado ao final da secao.
+-- -----------------------------------------------------------------------------
+grant update (payment_status, payment_timing, payment_confirmed_at, payment_confirmed_by, payment_confirmation_source)
+  on public.orders to authenticated;
+
+select rls_check.t('12 pagamentos','OWNER','com grant indevido: marca pago direto','authenticated', rls_check.uid('OWNER'),
+  $sql$update public.orders set payment_status = 'pago', payment_confirmed_at = now(), payment_confirmation_source = 'manual' where id = '20000000-0000-4000-8000-000000000104'$sql$,
+  'err:42501');
+
+select rls_check.t('12 pagamentos','MANAGER','com grant indevido: forja autor da confirmacao','authenticated', rls_check.uid('MANAGER'),
+  $sql$update public.orders set payment_confirmed_by = '00000000-0000-4000-8000-0000000000a3' where id = '20000000-0000-4000-8000-000000000101'$sql$,
+  'err:42501');
+
+select rls_check.t('12 pagamentos','OWNER','com grant indevido: troca fonte da confirmacao','authenticated', rls_check.uid('OWNER'),
+  $sql$update public.orders set payment_confirmation_source = 'provider' where id = '20000000-0000-4000-8000-000000000101'$sql$,
+  'err:42501');
+
+select rls_check.t('12 pagamentos','OWNER','com grant indevido: reverte pago para pendente','authenticated', rls_check.uid('OWNER'),
+  $sql$update public.orders set payment_status = 'pendente', payment_confirmed_at = null, payment_confirmation_source = null where id = '20000000-0000-4000-8000-000000000101'$sql$,
+  'err:42501');
+
+select rls_check.t('12 pagamentos','OWNER','com grant indevido: vira antecipado para na_entrega','authenticated', rls_check.uid('OWNER'),
+  $sql$update public.orders set payment_timing = 'na_entrega' where id = '20000000-0000-4000-8000-000000000103'$sql$,
+  'err:42501');
+
+select rls_check.t('12 pagamentos','OWNER','com grant indevido: edicao comercial legitima segue liberada','authenticated', rls_check.uid('OWNER'),
+  $sql$with u as (update public.orders set customer_name = 'Cliente P4 editado' where id = '20000000-0000-4000-8000-000000000104' returning 1) select count(*)::text from u$sql$,
+  'val:1');
+
+select rls_check.t('12 pagamentos','SISTEMA','tentativas diretas nao deixaram efeito','postgres',null,
+  $sql$select string_agg(payment_status || ':' || coalesce(payment_confirmation_source,'-') || ':' || payment_timing, ',' order by order_number) from public.orders where order_number in (101,103,104)$sql$,
+  'val:pago:manual:antecipado,pendente:-:antecipado,pendente:-:na_entrega');
+
+revoke update (payment_status, payment_timing, payment_confirmed_at, payment_confirmed_by, payment_confirmation_source)
+  on public.orders from authenticated;
+
+select rls_check.t('12 pagamentos','OWNER','RPC legitima continua funcionando apos o trigger','authenticated', rls_check.uid('OWNER'),
+  $sql$select public.confirm_manual_order_payment('20000000-0000-4000-8000-000000000104')$sql$,
+  'ok');
+
+select rls_check.t('12 pagamentos','SISTEMA','confirmacao manual de pix na entrega gravada','postgres',null,
+  $sql$select payment_status || ':' || payment_confirmation_source || ':' || (payment_confirmed_by = '00000000-0000-4000-8000-0000000000a1')::text from public.orders where id = '20000000-0000-4000-8000-000000000104'$sql$,
+  'val:pago:manual:true');
+
+-- -----------------------------------------------------------------------------
+-- 12.7 Provedor (service_role): confirma somente Pix antecipado, uma vez.
+-- -----------------------------------------------------------------------------
+select rls_check.t('12 pagamentos','SERVICE','provedor confirma pix antecipado','postgres', null,
+  $sql$select set_config('request.jwt.claims', '{"role":"service_role"}', true); select public.confirm_asaas_pix_payment('pay_test0103','20000000-0000-4000-8000-000000000103',5200,'PAYMENT_RECEIVED')$sql$,
+  'ok');
+
+select rls_check.t('12 pagamentos','SISTEMA','confirmacao do provedor gravada','postgres',null,
+  $sql$select payment_status || ':' || payment_confirmation_source || ':' || (payment_confirmed_by is null)::text from public.orders where id = '20000000-0000-4000-8000-000000000103'$sql$,
+  'val:pago:provider:true');
+
+select rls_check.t('12 pagamentos','SERVICE','webhook repetido nao gera efeito extra','postgres', null,
+  $sql$select set_config('request.jwt.claims', '{"role":"service_role"}', true); select public.confirm_asaas_pix_payment('pay_test0103','20000000-0000-4000-8000-000000000103',5200,'PAYMENT_RECEIVED')::text$sql$,
+  'val:false');
+
+select rls_check.t('12 pagamentos','SERVICE','provedor nao confirma pix na entrega','postgres', null,
+  $sql$select set_config('request.jwt.claims', '{"role":"service_role"}', true); select public.confirm_asaas_pix_payment('pay_test0104','20000000-0000-4000-8000-000000000104',5200,'PAYMENT_RECEIVED')$sql$,
+  'err:22023');
+
+select rls_check.t('12 pagamentos','SERVICE','provedor rejeita valor divergente','postgres', null,
+  $sql$select set_config('request.jwt.claims', '{"role":"service_role"}', true); select public.confirm_asaas_pix_payment('pay_test0103','20000000-0000-4000-8000-000000000103',100,'PAYMENT_RECEIVED')$sql$,
+  'err:22023');
+
+select rls_check.t('12 pagamentos','SISTEMA','grants da funcao do provedor nao foram ampliados','postgres',null,
+  $sql$select (has_function_privilege('authenticated','public.confirm_asaas_pix_payment(text,uuid,integer,text)','execute') or has_function_privilege('anon','public.confirm_asaas_pix_payment(text,uuid,integer,text)','execute'))::text$sql$,
   'val:false');

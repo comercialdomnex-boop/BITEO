@@ -191,4 +191,13 @@ test('payment migration keeps the backend rules', () => {
   assert.match(sql, /v_type,'novo',v_payment,v_timing,'pendente'/);
   assert.match(sql, /payment_method='pix' and payment_timing='antecipado'/);
   assert.doesNotMatch(sql, /grant update \([^)]*payment_status/);
+  // Defense in depth: direct writes blocked by role even if UPDATE is re-granted.
+  assert.match(sql, /create trigger orders_guard_payment_fields\s+before insert or update on public\.orders/);
+  assert.match(sql, /security invoker[\s\S]*current_user not in \('authenticated', 'anon'\)/);
+  for (const col of ['payment_status', 'payment_timing', 'payment_confirmed_at', 'payment_confirmed_by', 'payment_confirmation_source']) {
+    assert.match(sql, new RegExp(`new\.${col} is distinct from old\.${col}`));
+  }
+  // Legacy Pix orders with a provider charge stay confirmable by the webhook.
+  assert.match(sql, /set payment_timing = 'antecipado'[\s\S]*exists \(select 1 from public\.order_pix_payments p where p\.order_id = o\.id\)/);
+  assert.doesNotMatch(sql, /grant execute on function public\.confirm_asaas_pix_payment[^;]*authenticated/);
 });

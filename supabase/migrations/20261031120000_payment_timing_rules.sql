@@ -45,7 +45,15 @@ alter table public.orders
   add column if not exists payment_confirmed_by uuid references public.profiles (id) on delete set null,
   add column if not exists payment_confirmation_source text;
 
--- Pedidos existentes nunca tiveram pagamento antecipado obrigatório.
+-- Pedidos Pix que já têm cobrança no provedor eram pagamentos antecipados:
+-- precisam continuar confirmáveis pelo webhook (confirm_asaas_pix_payment).
+update public.orders o
+   set payment_timing = 'antecipado'
+ where o.payment_timing is null
+   and o.payment_method = 'pix'
+   and exists (select 1 from public.order_pix_payments p where p.order_id = o.id);
+
+-- Demais pedidos existentes nunca tiveram pagamento antecipado obrigatório.
 update public.orders
    set payment_timing = case when fulfillment_type = 'delivery' then 'na_entrega' else 'na_retirada' end
  where payment_timing is null;
@@ -123,6 +131,53 @@ revoke all on function private.orders_default_payment_timing() from public, anon
 --    meio usado); as constraints acima impedem incoerência com o momento.
 -- -----------------------------------------------------------------------------
 revoke update (payment_status) on public.orders from authenticated;
+
+-- Defesa em profundidade: mesmo que algum GRANT de UPDATE volte a existir
+-- (ex.: "grant all" pelo painel), anon/authenticated não alteram status de
+-- pagamento, momento ou auditoria por SQL direto. A função é SECURITY INVOKER:
+-- current_user é o papel que executa o comando. Dentro das RPCs SECURITY
+-- DEFINER ele é o dono da função, papel que o cliente não consegue assumir.
+-- Não usa GUC/flag de sessão, portanto não há o que o cliente falsificar.
+create or replace function private.guard_order_payment_fields()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.payment_status is distinct from 'pendente'
+       or new.payment_confirmed_at is not null
+       or new.payment_confirmed_by is not null
+       or new.payment_confirmation_source is not null then
+      raise exception 'Permission denied: orders must be created with pending payment.'
+        using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.payment_status is distinct from old.payment_status
+     or new.payment_timing is distinct from old.payment_timing
+     or new.payment_confirmed_at is distinct from old.payment_confirmed_at
+     or new.payment_confirmed_by is distinct from old.payment_confirmed_by
+     or new.payment_confirmation_source is distinct from old.payment_confirmation_source then
+    raise exception 'Permission denied: payment status and confirmation can only change through the confirmation RPC.'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists orders_guard_payment_fields on public.orders;
+create trigger orders_guard_payment_fields
+  before insert or update on public.orders
+  for each row execute function private.guard_order_payment_fields();
+
+revoke all on function private.guard_order_payment_fields() from public, anon, authenticated;
 
 -- -----------------------------------------------------------------------------
 -- 4. Guard de UPDATE: as RPCs de confirmação rodam com o auth.uid() do lojista,
