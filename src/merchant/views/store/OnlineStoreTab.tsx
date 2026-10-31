@@ -40,7 +40,7 @@ export const OnlineStoreTab: React.FC<OnlineStoreTabProps> = ({
   const [tempSlug, setTempSlug] = useState(online.slug);
   const [isEditingSlug, setIsEditingSlug] = useState(false);
 
-  const fullStoreUrl = `${window.location.origin}/${online.slug}`;
+  const fullStoreUrl = `https://biteo.domnextech.com.br/${online.slug}`;
 
   // Validate slug rules: only lowercase letters, numbers, and hyphens, 3 to 40 chars
   const validateSlug = (val: string) => {
