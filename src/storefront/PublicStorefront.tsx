@@ -74,5 +74,5 @@ export const PublicStorefront: React.FC<{ slug: string }> = ({ slug }) => {
     </div>
   );
   return <StorefrontApp key={config.id} restaurant={RestaurantService.buildProfile(config)}
-    config={config} onBackToMerchant={() => window.location.assign('/login')} />;
+    config={config} publicMode onBackToMerchant={() => window.location.assign('/login')} />;
 };
