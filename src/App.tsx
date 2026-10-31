@@ -9,6 +9,7 @@ import {
 import { createEmptyStoreConfig, StoreService } from './services/storeService';
 import { MerchantApp } from './merchant/MerchantApp';
 import { StorefrontApp } from './storefront/StorefrontApp';
+import { PublicStorefront } from './storefront/PublicStorefront';
 import { LoginView } from './auth/LoginView';
 import { RegisterView } from './auth/RegisterView';
 import { ResetPasswordView } from './auth/ResetPasswordView';
@@ -26,6 +27,11 @@ export type AppRoute =
   | 'storefront';
 
 export default function App() {
+  const publicSlug = (() => {
+    const path = decodeURIComponent(window.location.pathname).replace(/^\/+|\/+$/g, '');
+    const reserved = new Set(['login', 'cadastro', 'recuperar', 'recuperacao', 'merchant', 'onboarding']);
+    return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path) && !reserved.has(path) ? path : null;
+  })();
   const { status, currentUser, isRecovery, signOut, profileError, clearRecovery } =
     useAuth();
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('login');
@@ -360,7 +366,7 @@ default:
         </div>
       )}
       <main className="flex-1 w-full">
-        {renderCurrentView(false)}
+        {publicSlug ? <PublicStorefront slug={publicSlug} /> : renderCurrentView(false)}
       </main>
     </div>
   );
