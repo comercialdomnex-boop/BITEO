@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { MenuItem, MenuCategory, ModifierGroup, ModifierOption } from '../../../types';
 import { Modal, Button, formatCurrency } from '../../../components/shared';
+import { parseMoneyInput } from '../../../utils/money';
+import { validateModifierGroup } from '../../../utils/menuRules';
 import {
   Upload,
   Image as ImageIcon,
@@ -18,7 +20,8 @@ interface ProductModalProps {
   onClose: () => void;
   productToEdit?: MenuItem | null;
   categories: MenuCategory[];
-  onSave: (productData: Omit<MenuItem, 'id'> & { id?: string }) => void;
+  /** Rejects when the database refuses the write; the modal then stays open. */
+  onSave: (productData: Omit<MenuItem, 'id'> & { id?: string }) => Promise<void> | void;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
@@ -43,6 +46,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   // Validation & tab state
   const [activeTab, setActiveTab] = useState<'info' | 'modifiers'>('info');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (productToEdit) {
@@ -80,6 +85,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setModifierGroups([]);
     }
     setErrors({});
+    setSubmitError(null);
     setActiveTab('info');
   }, [productToEdit, isOpen, categories]);
 
@@ -192,22 +198,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   };
 
   // Save validation
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setSubmitError(null);
     const newErrors: { [key: string]: string } = {};
 
     if (!name.trim()) {
       newErrors.name = 'O nome do produto é obrigatório.';
     }
 
-    const parsedPrice = parseFloat(price.replace(',', '.'));
+    // parseMoneyInput accepts "12,50", "1.234,56" and "R$ 12,00".
+    const parsedPrice = parseMoneyInput(price) ?? NaN;
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
       newErrors.price = 'Informe um preço válido maior que zero.';
     }
 
     let parsedPromo: number | undefined = undefined;
     if (promotionalPrice.trim()) {
-      parsedPromo = parseFloat(promotionalPrice.replace(',', '.'));
+      parsedPromo = parseMoneyInput(promotionalPrice) ?? NaN;
       if (isNaN(parsedPromo) || parsedPromo <= 0) {
         newErrors.promotionalPrice = 'Preço promocional deve ser válido.';
       } else if (parsedPromo >= parsedPrice) {
@@ -225,8 +234,19 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       return;
     }
 
-    // Submit valid payload
-    onSave({
+    // Same rules the database and checkout enforce, checked before any write.
+    try {
+      modifierGroups.forEach(validateModifierGroup);
+    } catch (error) {
+      setErrors({});
+      setSubmitError(error instanceof Error ? error.message : 'Adicionais inválidos.');
+      setActiveTab('modifiers');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSave({
       ...(productToEdit?.id ? { id: productToEdit.id } : {}),
       name: name.trim(),
       description: description.trim(),
@@ -238,9 +258,14 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       preparationTimeMinutes: parseInt(preparationTimeMinutes, 10) || 15,
       highlightBadge: highlightBadge.trim() || undefined,
       modifierGroups,
-    });
-
-    onClose();
+      });
+      onClose();
+    } catch (error) {
+      // Keep the modal open so nothing the merchant typed is lost.
+      setSubmitError(error instanceof Error ? error.message : 'Não foi possível salvar o produto.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -264,14 +289,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             variant="primary"
             size="md"
             onClick={handleSubmit}
+            disabled={isSaving}
             className="flex-1 sm:flex-initial sm:px-8"
           >
-            {productToEdit ? 'Salvar Alterações' : 'Criar Produto'}
+            {isSaving ? 'Salvando...' : productToEdit ? 'Salvar Alterações' : 'Criar Produto'}
           </Button>
         </div>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-5 text-zinc-200">
+        {submitError && (
+          <div role="alert" className="rounded-xl border border-rose-500/50 bg-rose-950/30 p-3 text-xs text-rose-200">
+            {submitError}
+          </div>
+        )}
         {/* Navigation Tabs inside modal: Info vs Modifiers */}
         <div className="flex items-center p-1 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-semibold">
           <button

@@ -43,15 +43,15 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
   };
 
   // Initial load
+  const errorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback;
+
   const loadMenuData = async () => {
     setIsLoadingMenu(true);
     try {
-      const [cats, prods] = await Promise.all([
-        MenuService.getCategories(storeId),
-        MenuService.getItems(storeId),
-      ]);
-      setCategories(cats);
-      setItems(prods);
+      const menu = await MenuService.getMenu(storeId);
+      setCategories(menu.categories);
+      setItems(menu.items);
       setMenuLoadError(null);
     } catch (error) {
       setMenuLoadError(error instanceof Error ? error.message : 'Falha ao carregar o cardápio.');
@@ -64,11 +64,11 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
   useEffect(() => {
     let cancelled = false;
     setIsLoadingMenu(true);
-    Promise.all([MenuService.getCategories(storeId), MenuService.getItems(storeId)])
-      .then(([cats, prods]) => {
+    MenuService.getMenu(storeId)
+      .then(menu => {
         if (cancelled) return;
-        setCategories(cats);
-        setItems(prods);
+        setCategories(menu.categories);
+        setItems(menu.items);
         setMenuLoadError(null);
       })
       .catch(error => {
@@ -135,47 +135,47 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
   const handleSaveProduct = async (
     productData: Omit<MenuItem, 'id'> & { id?: string }
   ) => {
+    // Errors are re-thrown so the modal stays open with the merchant's input.
     try {
       if (productData.id) {
-        // Update existing product
         const updated = await MenuService.updateItem(storeId, productData.id, productData);
         setItems(prev => prev.map(i => (i.id === updated.id ? updated : i)));
         showToast(`Produto "${updated.name}" atualizado com sucesso!`);
       } else {
-        // Create new product
         const created = await MenuService.createItem(storeId, productData);
         setItems(prev => [...prev, created]);
-        // Update category count
-        await loadMenuData();
         showToast(`Produto "${created.name}" cadastrado com sucesso!`);
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Ocorreu um erro ao salvar o produto.');
+      showToast(errorMessage(error, 'Ocorreu um erro ao salvar o produto.'));
+      throw error;
     }
+    // Refresh counts and ordering from the database; a failure here is shown in the banner.
+    await loadMenuData().catch(() => {});
   };
 
   const handleDuplicateProduct = async (itemId: string) => {
     try {
       const duplicate = await MenuService.duplicateItem(storeId, itemId);
       setItems(prev => [...prev, duplicate]);
-      await loadMenuData();
       showToast(`Produto duplicado como "${duplicate.name}"`);
-    } catch {
-      showToast('Erro ao duplicar produto.');
+    } catch (error) {
+      showToast(errorMessage(error, 'Erro ao duplicar produto.'));
+      return;
     }
+    await loadMenuData().catch(() => {});
   };
 
   const handleDeleteProduct = async (itemId: string) => {
     try {
-      const deleted = await MenuService.deleteItem(storeId, itemId);
-      if (deleted) {
-        setItems(prev => prev.filter(i => i.id !== itemId));
-        await loadMenuData();
-        showToast('Produto excluído do cardápio.');
-      }
-    } catch {
-      showToast('Erro ao excluir produto.');
+      await MenuService.deleteItem(storeId, itemId);
+      setItems(prev => prev.filter(i => i.id !== itemId));
+      showToast('Produto excluído do cardápio.');
+    } catch (error) {
+      showToast(errorMessage(error, 'Erro ao excluir produto.'));
+      return;
     }
+    await loadMenuData().catch(() => {});
   };
 
   const handleToggleProductStatus = async (itemId: string) => {
@@ -185,8 +185,8 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
       showToast(
         `"${updated.name}" agora está ${updated.isAvailable ? 'ATIVO' : 'PAUSADO'}`
       );
-    } catch {
-      showToast('Não foi possível alterar a disponibilidade do item.');
+    } catch (error) {
+      showToast(errorMessage(error, 'Não foi possível alterar a disponibilidade do item.'));
     }
   };
 
@@ -197,8 +197,8 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
     try {
       const nextList = await MenuService.moveItemOrder(storeId, itemId, direction);
       setItems([...nextList]);
-    } catch {
-      showToast('Não foi possível reordenar o produto.');
+    } catch (error) {
+      showToast(errorMessage(error, 'Não foi possível reordenar o produto.'));
     }
   };
 
@@ -209,48 +209,60 @@ export const MenuView: React.FC<{ storeId: string }> = ({ storeId }) => {
   }) => {
     try {
       const created = await MenuService.createCategory(storeId, data);
-      await loadMenuData();
       showToast(`Categoria "${created.name}" criada com sucesso!`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Erro ao cadastrar categoria.');
+      showToast(errorMessage(error, 'Erro ao cadastrar categoria.'));
+      return;
     }
+    await loadMenuData().catch(() => {});
   };
 
   const handleUpdateCategory = async (
     id: string,
     data: { name: string; description?: string }
   ) => {
-    await MenuService.updateCategory(storeId, id, data);
-    await loadMenuData();
-    showToast('Categoria atualizada com sucesso!');
+    try {
+      await MenuService.updateCategory(storeId, id, data);
+      showToast('Categoria atualizada com sucesso!');
+    } catch (error) {
+      showToast(errorMessage(error, 'Não foi possível atualizar a categoria.'));
+      return;
+    }
+    await loadMenuData().catch(() => {});
   };
 
   const handleToggleCategoryStatus = async (id: string) => {
-    const updated = await MenuService.toggleCategoryStatus(storeId, id);
-    await loadMenuData();
-    showToast(
-      `Categoria "${updated.name}" ${updated.isActive ? 'ativada' : 'pausada'}.`
-    );
+    try {
+      const updated = await MenuService.toggleCategoryStatus(storeId, id);
+      showToast(`Categoria "${updated.name}" ${updated.isActive ? 'ativada' : 'pausada'}.`);
+    } catch (error) {
+      showToast(errorMessage(error, 'Não foi possível alterar a categoria.'));
+      return;
+    }
+    await loadMenuData().catch(() => {});
   };
 
   const handleDeleteCategory = async (id: string) => {
     try {
       await MenuService.deleteCategory(storeId, id);
-      await loadMenuData();
       showToast('Categoria removida.');
-    } catch (e: unknown) {
-      showToast(
-        e instanceof Error ? e.message : 'Não foi possível excluir a categoria.'
-      );
+    } catch (error) {
+      showToast(errorMessage(error, 'Não foi possível excluir a categoria.'));
+      return;
     }
+    await loadMenuData().catch(() => {});
   };
 
   const handleMoveCategoryOrder = async (
     id: string,
     direction: 'up' | 'down'
   ) => {
-    const updated = await MenuService.moveCategoryOrder(storeId, id, direction);
-    setCategories(updated);
+    try {
+      const updated = await MenuService.moveCategoryOrder(storeId, id, direction);
+      setCategories(updated);
+    } catch (error) {
+      showToast(errorMessage(error, 'Não foi possível reordenar a categoria.'));
+    }
   };
 
   // Helper to get category name

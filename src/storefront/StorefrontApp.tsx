@@ -18,6 +18,7 @@ import { createEmptyStoreConfig } from '../services/storeService';
 import { evaluateSchedule } from '../utils/hours';
 import { normalizePhone } from '../utils/phone';
 import { fromCents, sumCents, toCents } from '../utils/money';
+import { reconcileCart } from '../utils/menuRules';
 import { formatCurrency, Modal, Button, playOrderNotificationSound } from '../components/shared';
 import { CartItem } from './types';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -104,16 +105,47 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
   const activeDeliveryAreas = RestaurantService.getActiveDeliveryAreas(storeConfig);
 
   useEffect(() => {
-    const load = async () => {
-      MenuService.setStoreContext(storeConfig.id);
-      OrderService.setStoreContext(storeConfig.id, orders);
-      const cats = await MenuService.getCategories(storeConfig.id);
-      const prods = await MenuService.getItems(storeConfig.id);
-      setCategories(cats);
-      setItems(prods);
-    };
-    load();
+    OrderService.setStoreContext(storeConfig.id, orders);
   }, [storeConfig.id, orders]);
+
+  // Menu comes from the same Supabase tables the Merchant edits. A failure is
+  // shown as an error with retry, never as an empty menu.
+  const [menuStatus, setMenuStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [menuError, setMenuError] = useState<string | null>(null);
+  const [menuNonce, setMenuNonce] = useState(0);
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMenuStatus('loading');
+    setMenuError(null);
+    MenuService.getStorefrontMenu(storeConfig.id)
+      .then(menu => {
+        if (cancelled) return;
+        setCategories(menu.categories);
+        setItems(menu.items);
+        setMenuStatus('ready');
+        // Saved cart lines are re-bound to the current menu: unavailable items
+        // are removed and prices refreshed to what the server will charge.
+        setCartItems(prev => {
+          const { cart, removed } = reconcileCart(prev, menu.items);
+          if (removed.length) {
+            setCartNotice(
+              `${removed.length} ${removed.length === 1 ? 'item foi removido' : 'itens foram removidos'} da sacola porque não ${removed.length === 1 ? 'está' : 'estão'} mais disponíve${removed.length === 1 ? 'l' : 'is'}.`
+            );
+          }
+          return cart;
+        });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setMenuStatus('error');
+        setMenuError(error instanceof Error ? error.message : 'Não foi possível carregar o cardápio.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeConfig.id, menuNonce]);
 
   // Style classes based on visualStyle
   const getStyleClasses = () => {
@@ -682,7 +714,23 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
 
           {/* Products Feed (Responsive Grid: 1 col on mobile, 2 cols on tablet/desktop) */}
           <div className="max-w-4xl mx-auto px-4 mt-4">
-            {filteredItems.length > 0 ? (
+            {cartNotice && (
+              <div role="status" className="mb-3 rounded-2xl border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-200 flex items-start justify-between gap-3">
+                <span>{cartNotice}</span>
+                <button type="button" className="underline shrink-0" onClick={() => setCartNotice(null)}>OK</button>
+              </div>
+            )}
+            {menuStatus === 'loading' ? (
+              <p role="status" className="text-center py-16 text-xs text-zinc-400">Carregando cardápio...</p>
+            ) : menuStatus === 'error' ? (
+              <div role="alert" className="text-center py-12 px-4 rounded-3xl bg-rose-950/20 border border-rose-500/40 space-y-3">
+                <h4 className="text-sm font-bold text-white">Não foi possível carregar o cardápio</h4>
+                <p className="text-xs text-rose-200 max-w-sm mx-auto">{menuError}</p>
+                <Button variant="secondary" size="sm" onClick={() => setMenuNonce(n => n + 1)} className="text-xs">
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : filteredItems.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {filteredItems.map(item => (
                   <div
@@ -727,9 +775,9 @@ export const StorefrontApp: React.FC<StorefrontAppProps> = ({
                       </p>
                       <div className="mt-2.5 flex items-baseline gap-2">
                         <span className="text-sm font-bold text-white font-mono">
-                          {formatCurrency(item.promotionalPrice || item.price)}
+                          {formatCurrency(item.promotionalPrice ?? item.price)}
                         </span>
-                        {item.promotionalPrice && (
+                        {item.promotionalPrice != null && (
                           <span className="text-xs line-through text-zinc-500 font-mono">
                             {formatCurrency(item.price)}
                           </span>

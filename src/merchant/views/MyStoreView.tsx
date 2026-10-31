@@ -57,6 +57,8 @@ export type StoreTab =
 interface MyStoreViewProps {
   config: StoreConfig;
   items: MenuItem[];
+  /** Real load error for the preview; never rendered as an empty menu. */
+  itemsError?: string | null;
   onUpdateConfig: (config: StoreConfig) => void;
   onOpenStorefront?: () => void;
   /** Only management roles may change store settings. Defaults to editable. */
@@ -66,6 +68,7 @@ interface MyStoreViewProps {
 export const MyStoreView: React.FC<MyStoreViewProps> = ({
   config,
   items,
+  itemsError,
   onUpdateConfig,
   onOpenStorefront,
   canEdit = true,
@@ -513,6 +516,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
             <StorePreviewPhone
               config={config}
               items={items}
+              itemsError={itemsError}
               onOpenStorefront={onOpenStorefront}
             />
           </div>
@@ -567,6 +571,7 @@ export const MyStoreView: React.FC<MyStoreViewProps> = ({
           <StorePreviewPhone
             config={config}
             items={items}
+            itemsError={itemsError}
             onOpenStorefront={onOpenStorefront}
           />
         </div>

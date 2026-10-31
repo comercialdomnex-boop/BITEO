@@ -107,13 +107,24 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
     }
   }, [initialSelectedOrderId, orders, onClearInitialOrderId]);
 
-  // Sync menu items for MyStore preview
+  // Sync menu items for MyStore preview, with the same visibility rules as the storefront.
+  const [menuItemsError, setMenuItemsError] = useState<string | null>(null);
   useEffect(() => {
-    const loadItems = async () => {
-      const prods = await MenuService.getItems(activeStoreId);
-      setMenuItems(prods);
+    let cancelled = false;
+    MenuService.getStorefrontMenu(activeStoreId)
+      .then(menu => {
+        if (cancelled) return;
+        setMenuItems(menu.items);
+        setMenuItemsError(null);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMenuItemsError(error instanceof Error ? error.message : 'Não foi possível carregar o cardápio.');
+        }
+      });
+    return () => {
+      cancelled = true;
     };
-    loadItems();
   }, [activeStoreId, activeTab]);
 
   // Track incoming orders from Storefront to trigger visual banner and sound alert
@@ -357,6 +368,7 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
             <MyStoreView
               config={storeConfig}
               items={menuItems}
+              itemsError={menuItemsError}
               onUpdateConfig={onUpdateStoreConfig}
               onOpenStorefront={onOpenStorefront}
               canEdit={canEditStore}
@@ -393,6 +405,12 @@ export const MerchantApp: React.FC<MerchantAppProps> = ({
           isOpen={Boolean(activeModalOrder)}
           onClose={() => setActiveModalOrder(null)}
           onUpdateStatus={handleUpdateModalOrderStatus}
+          onPaymentConfirmed={orderId => {
+            onOrdersChange(orders.map(o => (o.id === orderId ? { ...o, paymentStatus: 'pago' as const } : o)));
+            setActiveModalOrder(current =>
+              current?.id === orderId ? { ...current, paymentStatus: 'pago' } : current
+            );
+          }}
         />
       )}
 
