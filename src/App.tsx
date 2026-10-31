@@ -11,6 +11,7 @@ import { MerchantApp } from './merchant/MerchantApp';
 import { StorefrontApp } from './storefront/StorefrontApp';
 import { PublicStorefront } from './storefront/PublicStorefront';
 import { PublicOrderTracking } from './storefront/PublicOrderTracking';
+import { PlatformAdmin } from './admin/PlatformAdmin';
 import { LoginView } from './auth/LoginView';
 import { RegisterView } from './auth/RegisterView';
 import { ResetPasswordView } from './auth/ResetPasswordView';
@@ -30,7 +31,7 @@ export type AppRoute =
 export default function App() {
   const publicSlug = (() => {
     const path = decodeURIComponent(window.location.pathname).replace(/^\/+|\/+$/g, '');
-    const reserved = new Set(['login', 'cadastro', 'recuperar', 'recuperacao', 'merchant', 'onboarding']);
+    const reserved = new Set(['login', 'cadastro', 'recuperar', 'recuperacao', 'merchant', 'onboarding', 'admin']);
     return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path) && !reserved.has(path) ? path : null;
   })();
   const { status, currentUser, isRecovery, signOut, profileError, clearRecovery } =
@@ -368,7 +369,7 @@ default:
         </div>
       )}
       <main className="flex-1 w-full">
-        {publicSlug ? (/^#\/pedido\/[0-9a-f]{64}$/.test(window.location.hash)
+        {window.location.pathname === '/admin' ? <PlatformAdmin /> : publicSlug ? (/^#\/pedido\/[0-9a-f]{64}$/.test(window.location.hash)
           ? <PublicOrderTracking slug={publicSlug} token={window.location.hash.slice('#/pedido/'.length)} />
           : <PublicStorefront slug={publicSlug} />) : renderCurrentView(false)}
       </main>
