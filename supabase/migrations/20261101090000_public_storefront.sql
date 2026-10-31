@@ -1,10 +1,12 @@
 -- Public catalog: only published, non-deleted stores; no customer/order access.
 -- Apply remotely only after review. Existing merchant policies are preserved.
+-- The PIX key is deliberately excluded from the public RPC. Manual PIX checkout
+-- must be validated separately before enabling public prepaid PIX payments.
 create or replace function public.get_public_store(p_slug text)
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'store', to_jsonb(s) - 'custom_domain',
-    'settings', (select to_jsonb(ss) - 'sound_alerts_enabled' - 'auto_accept_orders'
+    'settings', (select to_jsonb(ss) - 'sound_alerts_enabled' - 'auto_accept_orders' - 'pix_key'
                  from public.store_settings ss where ss.store_id = s.id),
     'hours', coalesce((select jsonb_agg(to_jsonb(h)) from public.business_hours h where h.store_id=s.id), '[]'::jsonb),
     'periods', coalesce((select jsonb_agg(to_jsonb(p)) from public.business_hour_periods p where p.store_id=s.id), '[]'::jsonb),
@@ -19,8 +21,13 @@ revoke all on function public.get_public_store(text) from public;
 grant execute on function public.get_public_store(text) to anon, authenticated;
 
 -- Grant only SELECT, with RLS constraining every table to public catalog rows.
-grant select on public.stores, public.categories, public.products,
-  public.product_modifier_groups, public.modifier_options to anon, authenticated;
+-- Anonymous access to stores is restricted to columns required by the menu's
+-- empty-state verification and published-store RLS checks. The RPC exposes
+-- only explicitly approved store data; no table-wide anonymous SELECT.
+grant select (id, is_published, deleted_at) on public.stores to anon;
+-- Menu tables contain only catalog fields; authenticated merchant grants remain unchanged.
+grant select on public.categories, public.products,
+  public.product_modifier_groups, public.modifier_options to anon;
 create policy "public published store read" on public.stores
   for select to anon, authenticated using (is_published and deleted_at is null);
 create policy "public published categories read" on public.categories
